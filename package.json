@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "build:tauri": "node scripts/export-tauri.mjs",
+    "build:tauri": "bun scripts/export-tauri.mjs",
     "lint": "eslint .",
     "clean": "next clean"
   },

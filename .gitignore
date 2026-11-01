@@ -9,6 +9,13 @@ target/
 .opencode/sdd/
 .opencode/sdd-review/
 .opencode/plans/
+out/
+# Sidecar binaries are fetched per-platform (see src-tauri/binaries/README.md),
+# never committed: they are large and differ per target.
+src-tauri/binaries/*
+!src-tauri/binaries/README.md
+# Tauri generated schemas/capabilities (recreated by `tauri dev/build`)
+src-tauri/gen/
 __pycache__/
 *.pyc
 .aistudio/

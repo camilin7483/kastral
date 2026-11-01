@@ -3,6 +3,9 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Oculta el botón flotante "N" de las devtools (solo existe en desarrollo;
+  // en producción nunca se muestra).
+  devIndicators: false,
   // A lockfile in the parent directory makes Next infer the wrong workspace root.
   outputFileTracingRoot: path.join(__dirname),
   eslint: {

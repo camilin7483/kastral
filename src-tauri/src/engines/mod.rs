@@ -54,6 +54,40 @@ pub fn sanitize_filename(raw: &str) -> String {
 /// Maximum accepted input size: 50 MB (mirrors the desktop tool limits).
 pub const MAX_INPUT_BYTES: usize = 50 * 1024 * 1024;
 
+/// Crea el directorio de trabajo de una tarea: nombre aleatorio de 128 bits
+/// generado por el RNG del SO, creación exclusiva (falla si ya existe) y
+/// modo 0o700 en Unix. Espeja el aislamiento del servidor
+/// (`crypto.randomUUID()` + `mkdir 0o700` en `lib/server-processors.ts`).
+pub fn make_workdir() -> PathBuf {
+    for _ in 0..16 {
+        let mut rnd = [0u8; 16];
+        if getrandom::fill(&mut rnd).is_err() {
+            break;
+        }
+        let hex: String = rnd.iter().map(|b| format!("{b:02x}")).collect();
+        let dir = std::env::temp_dir().join(format!("kastral-tauri-{hex}"));
+        #[cfg(unix)]
+        let created = {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new().mode(0o700).create(&dir)
+        };
+        #[cfg(not(unix))]
+        let created = std::fs::create_dir(&dir);
+        // `create` (no `create_all`) es exclusiva: si el nombre ya existe se
+        // reintenta con otro valor aleatorio en lugar de reutilizarlo.
+        if created.is_ok() {
+            return dir;
+        }
+    }
+    // Fallback si el RNG falla (no debería ocurrir): nombre único no
+    // aleatorio; el llamador valida con `create_dir_all`.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!("kastral-tauri-{}-{nanos}", std::process::id()))
+}
+
 /// Port of `verifyMagicBytes` from `lib/file-utils.ts`: rejects empty,
 /// oversized, or spoofed files before any temp file is written.
 /// All errors are user-facing Spanish messages.
@@ -310,5 +344,20 @@ mod tests {
         let big = vec![0x25u8; MAX_INPUT_BYTES + 1];
         let err = validate_input(&big, "doc.pdf").unwrap_err();
         assert!(err.contains("50 MB"));
+    }
+
+    #[test]
+    fn workdir_is_exclusive_and_private() {
+        let a = make_workdir();
+        let b = make_workdir();
+        assert_ne!(a, b);
+        assert!(a.is_dir() && b.is_dir());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(a.metadata().unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        std::fs::remove_dir(&a).unwrap();
+        std::fs::remove_dir(&b).unwrap();
     }
 }

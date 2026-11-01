@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fetch Tauri sidecar binaries for Linux CI.
-# Downloads a static ffmpeg build (johnvansickle, fallback BtbN) and places it
-# as src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu.
+# Downloads ONE pinned BtbN FFmpeg-Builds static build (no `latest` fallback:
+# reproducible sidecars) and places it as
+# src-tauri/binaries/ffmpeg-x86_64-unknown-linux-gnu.
 # Ghostscript is NOT a sidecar on Linux: it must come from the system
 # (workflow installs it via apt); the app resolves it through PATH.
 set -euo pipefail
@@ -14,23 +15,20 @@ trap 'rm -rf "$TMP"' EXIT
 
 fail() { echo "ci-fetch-sidecars: ERROR: $*" >&2; exit 1; }
 
-JOHN="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
-BTBN="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+# Pinned build (verify it still exists if CI starts failing):
+# BtbN tag autobuild-2026-11-01-12-49, asset ffmpeg-n8.1.3-29-gad3b795b72-linux64-gpl-8.1.tar.xz
+BTBN_TAG="autobuild-2026-11-01-12-49"
+BTBN_ASSET="ffmpeg-n8.1.3-29-gad3b795b72-linux64-gpl-8.1.tar.xz"
+BTBN_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/${BTBN_TAG}/${BTBN_ASSET}"
 
 ARCHIVE="$TMP/ffmpeg.tar.xz"
-if curl -fsSL --retry 3 -o "$ARCHIVE" "$JOHN"; then
-  BIN="$(tar -tf "$ARCHIVE" | grep -E '/ffmpeg$' | head -n1)"
-  [ -n "$BIN" ] || fail "johnvansickle archive has no ffmpeg binary"
-  tar -xJf "$ARCHIVE" -C "$TMP" "$BIN"
-  cp "$TMP/$BIN" "$OUT"
-elif curl -fsSL --retry 3 -o "$ARCHIVE" "$BTBN"; then
-  BIN="$(tar -tf "$ARCHIVE" | grep -E '/bin/ffmpeg$' | head -n1)"
-  [ -n "$BIN" ] || fail "BtbN archive has no bin/ffmpeg binary"
-  tar -xJf "$ARCHIVE" -C "$TMP" "$BIN"
-  cp "$TMP/$BIN" "$OUT"
-else
-  fail "could not download static ffmpeg from johnvansickle ($JOHN) nor BtbN ($BTBN). Check network access and update URLs."
-fi
+curl -fsSL --retry 3 -o "$ARCHIVE" "$BTBN_URL" \
+  || fail "could not download pinned static ffmpeg ($BTBN_URL). Check network access or update the pinned tag/asset."
+
+BIN="$(tar -tf "$ARCHIVE" | grep -E '/bin/ffmpeg$' | head -n1)"
+[ -n "$BIN" ] || fail "pinned BtbN archive has no bin/ffmpeg binary (layout changed?)"
+tar -xJf "$ARCHIVE" -C "$TMP" "$BIN"
+cp "$TMP/$BIN" "$OUT"
 
 chmod +x "$OUT"
 [ -s "$OUT" ] || fail "downloaded ffmpeg is empty ($OUT)"

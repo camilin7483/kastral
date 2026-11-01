@@ -1910,6 +1910,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "genpdf",
+ "getrandom 0.3.4",
  "pulldown-cmark",
  "quick-xml 0.38.4",
  "serde_json",

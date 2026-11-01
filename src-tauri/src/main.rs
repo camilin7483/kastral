@@ -2,13 +2,10 @@
 
 mod engines;
 
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-#[tauri::command]
-fn kastral_health() -> String {
-    String::from(r#"{"status":"ok","engine":"tauri-spike"}"#)
-}
+/// Longitud máxima del base64 de entrada: 4/3 del límite de bytes más
+/// margen para padding y saltos de línea. Se rechaza ANTES de decodificar
+/// para no reservar memoria desproporcionada ante entradas hostiles.
+const MAX_B64_LEN: usize = 4 * engines::MAX_INPUT_BYTES / 3 + 4096;
 
 fn json_failed(msg: &str) -> String {
     serde_json::json!({"status": "failed", "error": msg}).to_string()
@@ -25,7 +22,12 @@ fn kastral_process(
     params_json: String,
     data_b64: String,
 ) -> String {
-    let workdir = make_workdir();
+    if data_b64.len() > MAX_B64_LEN {
+        return json_failed(
+            "El archivo supera el límite de 50 MB permitido en la aplicación de escritorio.",
+        );
+    }
+    let workdir = engines::make_workdir();
     if std::fs::create_dir_all(&workdir).is_err() {
         return json_failed("No se pudo preparar el espacio de trabajo temporal.");
     }
@@ -39,14 +41,6 @@ fn kastral_process(
     );
     let _ = std::fs::remove_dir_all(&workdir);
     result
-}
-
-fn make_workdir() -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    std::env::temp_dir().join(format!("kastral-tauri-{}-{nanos}", std::process::id()))
 }
 
 fn kastral_process_inner(
@@ -178,7 +172,7 @@ fn kastral_process_inner(
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![kastral_health, kastral_process])
+        .invoke_handler(tauri::generate_handler![kastral_process])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -317,6 +311,22 @@ mod tests {
         );
         let v = completed(&out);
         assert_eq!(v["output_mime_type"], "application/pdf");
+    }
+
+    #[test]
+    fn rechaza_b64_sobredimensionado_antes_de_decodificar() {
+        let too_big = "A".repeat(super::MAX_B64_LEN + 1);
+        let out = super::kastral_process(
+            "comprimir-pdf".into(),
+            "doc.pdf".into(),
+            "pdf".into(),
+            "{}".into(),
+            too_big,
+        );
+        let v: serde_json::Value = serde_json::from_str(&out).expect("respuesta JSON válida");
+        assert_eq!(v["status"], "failed");
+        let msg = v["error"].as_str().unwrap_or("");
+        assert!(msg.contains("50 MB"), "mensaje: {msg}");
     }
 
     #[test]

@@ -17,6 +17,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Motores nativos que exigen los tests (Ghostscript, FFmpeg)
+      - name: Instalar motores (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ghostscript ffmpeg
+      - name: Instalar motores (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg ghostscript -y
       - run: bun install
       - run: bunx tsc --noEmit
       - run: bunx eslint . --max-warnings 100

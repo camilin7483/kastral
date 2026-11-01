@@ -5,7 +5,6 @@
 // (counted dynamically from lib/tools-catalog.ts), and always restores app/api.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,7 +25,9 @@ function hasCommand(cmd) {
 }
 
 function main() {
-  const backupDir = mkdtempSync(join(tmpdir(), 'kastral-api-backup-'));
+  // NOTE: backup lives inside ROOT (same filesystem) — /tmp is often a
+  // different mount and renameSync would fail with EXDEV there.
+  const backupDir = mkdtempSync(join(ROOT, '.export-backup-'));
   const backupApi = join(backupDir, 'api');
   let moved = false;
 

@@ -10,6 +10,7 @@ target/
 .opencode/sdd-review/
 .opencode/plans/
 out/
+.export-backup-*/
 # Sidecar binaries are fetched per-platform (see src-tauri/binaries/README.md),
 # never committed: they are large and differ per target.
 src-tauri/binaries/*

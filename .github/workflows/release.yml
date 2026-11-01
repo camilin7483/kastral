@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: choco install ffmpeg ghostscript -y
+      - run: .\scripts\ci-fetch-sidecars.ps1
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kastral-windows-setup
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/nsis/*-setup.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ghostscript build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bash scripts/ci-fetch-sidecars.sh
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          args: --bundles deb,appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kastral-linux-packages
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage

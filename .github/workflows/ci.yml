@@ -24,6 +24,10 @@ jobs:
       - name: Instalar motores (Windows)
         if: runner.os == 'Windows'
         run: choco install ffmpeg ghostscript -y
+      - name: Añadir Ghostscript al PATH (Windows)
+        if: runner.os == 'Windows'
+        run: $gs = Get-ChildItem 'C:\Program Files\gs\gs*' -Directory | Select-Object -First 1; "$($gs.FullName)\bin" | Out-File -Append $env:GITHUB_PATH
+        shell: pwsh
       - run: bun install
       - name: Instalar dependencias Python (tests backend)
         run: python -m pip install -r backend/requirements.txt

@@ -7,7 +7,7 @@
 2. `02-kastral-selector-formatos.png` — Menú desplegable personalizado (`CustomSelect`) mostrando los formatos de salida (`WEBP`, `JPG`, `PNG`, `AVIF`, `BMP`) con resaltado en naranja de marca (`#C86D2D`).
 3. `03-kastral-conversion-imagen-completada.png` — Procesamiento local completado en el navegador mostrando reducción real del `-64.1 % de peso` y botón de descarga directa.
 4. `04-kastral-compresion-pdf-local.png` — Herramienta de Compresión de PDF ejecutándose 100 % en el navegador sin conexión a Internet.
-5. `05-kastral-catalogo-15-herramientas.png` — Catálogo completo de las 15 herramientas gratuitas (Imágenes, PDF, Documentos, Hojas de Cálculo, Audio, Vídeo y Archivos ZIP).
+5. `05-kastral-catalogo-15-herramientas.png` — Catálogo completo de las 17 herramientas gratuitas (Imágenes, PDF, Documentos, Hojas de Cálculo, Audio, Vídeo y Archivos ZIP).
 6. `06-kastral-tema-arena-claro.png` — Vista de Kastral en su tema alternativo Arena Cálida (`#F3EFEA`) y pie de página con créditos de Andres Guerrero.
 7. `logo-kastral-ave.png` y `logo-kastral-icono-k.png` — Logotipos oficiales de la marca Kastral.
 
@@ -46,7 +46,7 @@ Estructura visual del vídeo paso a paso basada en las capturas adjuntas:
    - A continuación, muestra `04-kastral-compresion-pdf-local.png` evidenciando cómo un documento PDF multipágina se comprime directamente en la memoria del navegador sin subir archivos a ningún servidor externo.
 
 4. CATÁLOGO DE 15 HERRAMIENTAS Y MODO ARENA CÁLIDA (00:25 - 00:34):
-   - Desplazamiento panorámico sobre `05-kastral-catalogo-15-herramientas.png` mostrando las 15 herramientas gratuitas organizadas por categorías: Imágenes, PDF, Documentos, Hojas de Cálculo, Audio, Vídeo y Archivos ZIP.
+   - Desplazamiento panorámico sobre `05-kastral-catalogo-15-herramientas.png` mostrando las 17 herramientas gratuitas organizadas por categorías: Imágenes, PDF, Documentos, Hojas de Cálculo, Audio, Vídeo y Archivos ZIP.
    - Breve transición a `06-kastral-tema-arena-claro.png` mostrando el cambio al tema claro cálido y el pie de página oficial.
 
 5. CIERRE DE MARCA Y AUTORÍA (00:34 - 00:40):
@@ -71,7 +71,7 @@ Primer plano en movimiento suave sobre la mesa de trabajo oscura de la aplicaci�
 
 ### Escena 3 — Compresión de PDF y Catálogo de 15 Herramientas Offline (Usa `04-kastral-compresion-pdf-local.png` y `05-kastral-catalogo-15-herramientas.png`)
 ```text
-Recorrido visual dinámico por la plataforma Kastral funcionando 100 % sin conexión a Internet: primero muestra la herramienta de Compresión de PDF procesando páginas localmente en el navegador, y luego hace un paneo elegante por la cuadrícula del catálogo de 15 herramientas de Imágenes, PDF, Documentos, Audio, Vídeo y ZIP sobre fondo oscuro carbón.
+Recorrido visual dinámico por la plataforma Kastral funcionando con su servidor local (sin necesidad de Internet externa): primero muestra la herramienta de Compresión de PDF procesando con el motor Ghostscript local, y luego hace un paneo elegante por la cuadrícula del catálogo de 17 herramientas de Imágenes, PDF, Documentos, Audio, Vídeo y ZIP sobre fondo oscuro carbón.
 ```
 
 ### Escena 4 — Tema Arena Cálida y Cierre con Autoría (Usa `06-kastral-tema-arena-claro.png` y `logo-kastral-icono-k.png`)

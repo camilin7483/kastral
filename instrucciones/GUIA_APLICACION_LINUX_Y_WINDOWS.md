@@ -82,7 +82,7 @@ Dentro de esta carpeta `instrucciones/` encontrarás el archivo **`ejecutar-wind
 
 ### Cómo usarlo en Windows:
 1. Haz doble clic sobre **`instrucciones\ejecutar-windows.bat`**.
-2. El script levantará automáticamente el servidor local en `http://127.0.0.1:3000` y abrirá **Kastral** en modo ventana de aplicación nativa (`--app=http://127.0.0.1:3000`) usando Microsoft Edge o Chromium instalado en el sistema, funcionando 100 % sin Internet.
+2. El script levantará automáticamente el servidor local en `http://127.0.0.1:3000` y abrirá **Kastral** en modo ventana de aplicación nativa (`--app=http://127.0.0.1:3000`) usando Microsoft Edge o Chromium instalado en el sistema, funcionando con el servidor local sin necesidad de Internet externa.
 3. Puedes hacer clic derecho en `ejecutar-windows.bat` -> **Enviar a -> Escritorio (crear acceso directo)** y asignarle el icono `public\pwa-512x512.png`.
 
 ---

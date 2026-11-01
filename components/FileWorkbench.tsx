@@ -228,11 +228,16 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
   };
 
   /**
-   * Ejecuta la herramienta en el motor correcto: servidor para las que dependen de
-   * Sharp/Ghostscript/FFmpeg, navegador para el resto.
+   * Ejecuta la herramienta en el motor correcto: en escritorio, además del
+   * servidor y AVIF, la salida PDF de convertir-documento va al motor Tauri
+   * (única capacidad exclusiva del desktop; html/txt siguen en el navegador).
    */
   const executeItem = async (item: WorkbenchItem, slug: string, fmt: string) => {
-    if (isTauri() && (activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(fmt))) {
+    const needsTauriPdf = slug === 'convertir-documento' && fmt.toLowerCase() === 'pdf';
+    if (
+      isTauri() &&
+      (activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(fmt) || needsTauriPdf)
+    ) {
       return processTauriItem(item, slug, fmt);
     }
     if (activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(fmt)) {

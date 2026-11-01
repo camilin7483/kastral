@@ -1,3 +1,5 @@
+import { getToolBySlug } from './tools-catalog';
+
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
   return '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
@@ -11,6 +13,22 @@ interface TauriProcessResponse {
   details?: string;
   error?: string;
   data_b64?: string;
+}
+
+// Decodifica base64 a bytes en tramos de 64 KB sobre un buffer prealocado:
+// evita un atob() gigante de una sola vez que dispara picos de memoria.
+const BASE64_CHUNK_CHARS = 64 * 1024; // múltiplo de 4: nunca parte un cuarteto
+
+function decodeBase64Chunked(dataB64: string): Uint8Array<ArrayBuffer> {
+  const clean = dataB64.replace(/\s+/g, '');
+  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  const bytes = new Uint8Array((clean.length * 3) / 4 - padding);
+  let pos = 0;
+  for (let i = 0; i < clean.length; i += BASE64_CHUNK_CHARS) {
+    const bin = atob(clean.slice(i, i + BASE64_CHUNK_CHARS));
+    for (let j = 0; j < bin.length; j++) bytes[pos++] = bin.charCodeAt(j);
+  }
+  return bytes;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -38,6 +56,10 @@ export async function processOnTauri(
   mimeType: string;
   details: string;
 }> {
+  const tool = getToolBySlug(toolSlug);
+  if (tool && file.size > tool.maxFileSizeMB * 1024 * 1024) {
+    throw new Error(`Supera el límite máximo de ${tool.maxFileSizeMB} MB.`);
+  }
   const dataB64 = await fileToBase64(file);
   const { invoke } = await import('@tauri-apps/api/core');
   const rawText = await invoke<string>('kastral_process', {
@@ -51,9 +73,7 @@ export async function processOnTauri(
   if (raw.status === 'failed' || !raw.data_b64) {
     throw new Error(raw.error || 'Tauri no pudo procesar el archivo.');
   }
-  const bin = atob(raw.data_b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const bytes = decodeBase64Chunked(raw.data_b64);
   const mimeType = raw.output_mime_type || 'application/octet-stream';
   const outputBlob = new Blob([bytes], { type: mimeType });
   return {

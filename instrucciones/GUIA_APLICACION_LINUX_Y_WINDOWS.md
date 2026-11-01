@@ -26,6 +26,29 @@ Solo necesitas tener instalado **Node.js (versión 18 o superior)** una única v
 - En **Windows 10 / 11:**
   Instala Node.js LTS desde el instalador oficial (`node-v20-x64.msi`).
 
+### Motores del sistema (FFmpeg + Ghostscript)
+
+Las herramientas de audio/vídeo usan **FFmpeg** y las de PDF usan
+**Ghostscript**. Si ejecutas Kastral en modo web local (opciones A–C),
+instálalos en tu sistema:
+
+- En **Linux (Ubuntu/Debian):**
+  ```bash
+  sudo apt update && sudo apt install -y ffmpeg ghostscript
+  ```
+- En **Linux (Arch/Manjaro):**
+  ```bash
+  sudo pacman -S --needed ffmpeg ghostscript
+  ```
+- En **Windows 10 / 11:** instala FFmpeg (`winget install Gyan.FFmpeg`) y
+  Ghostscript desde su instalador oficial (`https://www.ghostscript.com/`),
+  aceptando la opción de añadirlo al PATH durante la instalación.
+
+> El instalador de la aplicación de escritorio (Tauri) **ya incluye FFmpeg**
+> en su interior, así que en modo desktop solo necesitas instalar
+> **Ghostscript** en tu sistema para las herramientas de PDF
+> (comprimir PDF, PDF a imágenes).
+
 ---
 
 ## Paso 1: Preparar y Compilar la Aplicación Localmente (Una sola vez)

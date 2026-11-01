@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { KASTRAL_TOOLS } from '@/lib/tools-catalog';
 
+export const dynamic = 'force-static';
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || process.env.APP_URL || 'https://kastral.app').replace(/\/$/, '');
   const now = new Date();

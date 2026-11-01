@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  output: 'standalone',
+  output: process.env.KASTRAL_EXPORT ? 'export' : 'standalone',
   serverExternalPackages: ['sharp'],
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {

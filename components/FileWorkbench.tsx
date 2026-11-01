@@ -34,6 +34,7 @@ import {
   ExtractedArchiveItem,
 } from '@/lib/browser-processors';
 import { CustomSelect } from '@/components/CustomSelect';
+import { isTauri, processOnTauri } from '@/lib/tauri-engine';
 
 // Formats the canvas API cannot encode, so they always need the server engine (Sharp).
 const SERVER_ONLY_FORMATS = new Set(['avif']);
@@ -209,10 +210,31 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
   };
 
   /**
+   * Envía el archivo al comando Tauri `kastral_process` (misma respuesta que el servidor)
+   * y devuelve el resultado con el mismo shape que processOnServer.
+   */
+  const processTauriItem = async (item: WorkbenchItem, slug: string, fmt: string) => {
+    updateItemState(item.id, { progress: 15 });
+    const res = await processOnTauri(item.file, slug, fmt, params);
+    updateItemState(item.id, { progress: 100 });
+    return {
+      outputBlob: res.outputBlob,
+      outputFilename: res.outputFilename,
+      outputSize: res.outputSize,
+      mimeType: res.mimeType,
+      details: res.details,
+      extractedItems: undefined,
+    };
+  };
+
+  /**
    * Ejecuta la herramienta en el motor correcto: servidor para las que dependen de
    * Sharp/Ghostscript/FFmpeg, navegador para el resto.
    */
   const executeItem = async (item: WorkbenchItem, slug: string, fmt: string) => {
+    if (isTauri() && (activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(fmt))) {
+      return processTauriItem(item, slug, fmt);
+    }
     if (activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(fmt)) {
       return processOnServer(item, slug, fmt);
     }

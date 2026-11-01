@@ -8,4 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig([{
     extends: [...next],
+}, {
+    // Artefactos generados por Tauri/Rust: no son código del proyecto.
+    ignores: ["src-tauri/target/**", "out/**", ".next/**"],
 }]);

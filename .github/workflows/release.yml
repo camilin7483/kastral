@@ -17,6 +17,10 @@ jobs:
       - run: bun install
       - run: choco install ffmpeg ghostscript -y
       - run: .\scripts\ci-fetch-sidecars.ps1
+      # Windows bundles Ghostscript too: enable its sidecar only on this runner
+      # (repo keeps externalBin ffmpeg-only so Linux dev/builds don't require a gs binary file).
+      - run: python -c "import json;p='src-tauri/tauri.conf.json';d=json.load(open(p));d['bundle']['externalBin']=['binaries/ffmpeg','binaries/gs'];json.dump(d,open(p,'w'),indent=2)"
+        shell: pwsh
       - uses: tauri-apps/tauri-action@v0
         with:
           args: --bundles nsis

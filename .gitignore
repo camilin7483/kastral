@@ -9,3 +9,7 @@ target/
 .opencode/sdd/
 .opencode/sdd-review/
 .opencode/plans/
+__pycache__/
+*.pyc
+.aistudio/
+tsconfig.tsbuildinfo

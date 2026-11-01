@@ -8,3 +8,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+base64 = "0.22"
+serde_json = "1"
+pulldown-cmark = "0.12"
+quick-xml = "0.38"
+zip = "2"

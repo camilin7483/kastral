@@ -1,6 +1,0 @@
-{
-  "name": "Kastral — Plataforma Gratuita de Conversión y Compresión de Archivos",
-  "description": "Convierte, comprime y optimiza imágenes, documentos PDF, archivos de texto, audio, vídeo y archivos ZIP gratis desde tu navegador sin instalar programas.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -22,3 +22,9 @@ __pycache__/
 .aistudio/
 tsconfig.tsbuildinfo
 public/assets/aistudio/
+
+# Notas internas de trabajo (no se publican)
+.instrucciones/
+.aistudio/
+/task-*-report.md
+metadata.json

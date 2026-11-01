@@ -25,6 +25,8 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ffmpeg ghostscript -y
       - run: bun install
+      - name: Instalar dependencias Python (tests backend)
+        run: python -m pip install -r backend/requirements.txt
       - run: bunx tsc --noEmit
       - run: bunx eslint . --max-warnings 100
       - run: bun test lib/

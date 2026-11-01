@@ -123,7 +123,10 @@ export async function cleanupExpiredTasks(): Promise<number> {
  * y con límite estricto de tiempo (timeout).
  */
 async function runSafeCommand(bin: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync(bin, args, {
+  // En Windows, Ghostscript se instala como gswin64c.exe (sin alias `gs`):
+  // se resuelve aquí para que el servidor funcione en ambas plataformas.
+  const resolvedBin = bin === 'gs' && process.platform === 'win32' ? 'gswin64c' : bin;
+  return execFileAsync(resolvedBin, args, {
     cwd,
     timeout: TASK_TIMEOUT_MS,
     maxBuffer: 10 * 1024 * 1024,

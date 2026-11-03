@@ -301,6 +301,11 @@ async function executeServerTool(
     const height = Number(params.height || 0);
     const fit = String(params.fit || 'inside') as 'inside' | 'cover' | 'fill';
 
+    // Dimensiones absurdas harían que Sharp intentase reservar gigas de RAM.
+    if (width > 8000 || height > 8000 || width < 0 || height < 0) {
+      throw new Error('Las dimensiones pedidas superan el máximo permitido (8000 px).');
+    }
+
     if (width > 0 || height > 0) {
       pipeline = pipeline.resize({
         width: width > 0 ? width : undefined,

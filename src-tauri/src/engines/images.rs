@@ -97,6 +97,13 @@ pub fn process(
     let quality = if q == 0 { 80 } else { q.clamp(10, 100) };
     let width = num_param(params, &["width", "maxWidth"]);
     let height = num_param(params, &["height"]);
+    // Dimensiones absurdas (p.ej. width:99999999) harían que FFmpeg intentase
+    // reservar gigas de RAM y el único mensaje sería el crudo en inglés.
+    if width > 8000 || height > 8000 || width < 0 || height < 0 {
+        return Err(String::from(
+            "Las dimensiones pedidas superan el máximo permitido (8000 px).",
+        ));
+    }
     let fit = str_param(params, "fit").unwrap_or_else(|| String::from("inside"));
 
     let ffmpeg = find_bin("ffmpeg")?;
@@ -208,6 +215,31 @@ pub fn process(
 mod tests {
     use super::*;
     use std::process::Command;
+
+    #[test]
+    fn rejects_absurd_dimensions() {
+        let dir = std::env::temp_dir();
+        let input = dir.join("kastral-dim-test.png");
+        // PNG mínimo 1x1 generado a mano (sin fixtures externos).
+        std::fs::write(
+            &input,
+            &[
+                0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I',
+                b'H', b'D', b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90,
+                0x77, 0x53, 0xDE, 0, 0, 0, 12, b'I', b'D', b'A', b'T', 0x08,
+                0xD7, 0x63, 0xF8, 0x0F, 0x00, 0x00, 0x01, 0x00, 0x01, 0x9D,
+                0x34, 0x4E, 0x1D, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xAE,
+                0x42, 0x60, 0x82,
+            ],
+        )
+        .unwrap();
+        let mut params = serde_json::Map::new();
+        params.insert("width".into(), serde_json::json!(99999999));
+        let err = process("convertir", &input, "mini.png", "jpg", &serde_json::Value::Object(params), &dir)
+            .unwrap_err();
+        assert!(err.contains("8000 px"), "mensaje en español esperado, fue: {err}");
+        let _ = std::fs::remove_file(&input);
+    }
 
     #[test]
     fn rejects_unsupported_format() {

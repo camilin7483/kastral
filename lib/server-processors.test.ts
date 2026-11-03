@@ -279,3 +279,22 @@ test('Motor de servidor: .avi corrupto devuelve error honesto (no genérico)', a
     `error honesto esperado, recibido: ${task.error}`
   );
 });
+
+test('Motor de servidor: rechaza dimensiones absurdas sin reservar memoria', async () => {
+  const pngBuffer = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: { r: 1, g: 2, b: 3 } },
+  })
+    .png()
+    .toBuffer();
+
+  const task = await createAndRunServerTask({
+    toolSlug: 'redimensionar-imagen',
+    fileBuffer: pngBuffer,
+    originalName: 'mini.png',
+    targetFormat: 'jpg',
+    params: { width: 99999999 },
+  });
+
+  assert.equal(task.status, 'failed');
+  assert.match(task.error || '', /8000 px/);
+});

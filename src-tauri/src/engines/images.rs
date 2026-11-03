@@ -251,7 +251,9 @@ mod tests {
 
     #[test]
     fn rejects_absurd_dimensions() {
-        let dir = std::env::temp_dir();
+        let dir = std::env::temp_dir().join("kastral-img-dims-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let input = dir.join("kastral-dim-test.png");
         // PNG mínimo 1x1 generado a mano (sin fixtures externos).
         std::fs::write(
@@ -279,7 +281,7 @@ mod tests {
             err.contains("8000 px"),
             "mensaje en español esperado, fue: {err}"
         );
-        let _ = std::fs::remove_file(&input);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn converts_generated_avi_to_mp4() {
         let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
-        let dir = std::env::temp_dir().join("kastral-vid-avi-test");
+        let dir = std::env::temp_dir().join("kastral-vid-avi-in-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let input = dir.join("in.avi");

@@ -56,6 +56,11 @@ export function Footer() {
             </h2>
             <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
               <li>
+                <Link href="/por-que-kastral" className="hover:text-[#C86D2D] dark:hover:text-[#DF7B35] transition-colors">
+                  Por qué Kastral (comparativa honesta)
+                </Link>
+              </li>
+              <li>
                 <Link href="/como-funciona" className="hover:text-[#C86D2D] dark:hover:text-[#DF7B35] transition-colors">
                   Cómo funciona y seguridad de archivos
                 </Link>

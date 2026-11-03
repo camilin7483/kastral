@@ -105,6 +105,20 @@ bun run build && bun run start   # http://localhost:3000, sin telemetría
 
 `output: 'standalone'` genera un servidor Node autocontenido (`.next/standalone/server.js`). Variables críticas en producción: `NEXT_PUBLIC_SITE_URL` (canónica), `MAX_FILE_SIZE_MB`, `MAX_CONCURRENT_TASKS=2`, `TASK_TIMEOUT_SECONDS=60`, `TEMP_CLEANUP_MINUTES=15` (purga de temporales). El backend FastAPI (`backend/`) solo tiene sentido si sirves la web a terceros desde un servidor dedicado: replica los mismos motores con `ALLOWED_ORIGINS` restringido a tu dominio y mismos límites.
 
+## Comparativa honesta (Kastral frente a ILovePDF / SmallPDF / Convertio)
+
+| Aspecto | Kastral | Terceros |
+|---|---|---|
+| Procesamiento en tu dispositivo cuando es posible | ✔ 11 herramientas con modo navegador (`lib/tools-catalog.ts`, `app/como-funciona`) | ≈/varía (centrado en servidor) |
+| Registro para uso básico | ✔ Sin registro (`app/privacidad`) | ≈/varía según plan |
+| App de escritorio sin conexión | ✔ Tauri, sin cuentas ni telemetría (`src-tauri/`) | ≈/varía |
+| Límites publicados por herramienta | ✔ 25–100 MB (`app/condiciones`, fichas) | ≈/varía según plan |
+| Marcas de agua | ✔ Sin marcas de agua | ≈/varía según plan |
+| Amplitud de formatos | ≈ 17 herramientas de uso común | ✔ Convertio: catálogo más amplio |
+| OCR / firma electrónica / API pública | ✘ No disponibles | ≈/varía según plan |
+
+Ver detalle y matices en [`app/por-que-kastral/page.tsx`](./app/por-que-kastral/page.tsx).
+
 ## Licencia (MIT)
 
 Kastral se distribuye bajo licencia MIT — ver [LICENSE](./LICENSE). © 2026 Andres Guerrero. Soporte: formulario de `/contacto` (abre tu correo a la dirección configurada).

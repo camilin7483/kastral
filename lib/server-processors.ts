@@ -99,6 +99,79 @@ function summarizeToolError(message: string): string {
 }
 
 /**
+ * Codificadores FFmpeg válidos para AV1/AVIF en imagen.
+ * Ojo: `libaom-avif` NO existe (ese nombre erróneo tumbaba PNG→AVIF en
+ * escritorio con "Unknown encoder"); el correcto es `libaom-av1`.
+ */
+const AVIF_VIDEO_ENCODERS = ['libaom-av1', 'libsvtav1', 'librav1e'] as const;
+
+/**
+ * Busca un codificador AV1/AVIF en la salida de `ffmpeg -encoders`.
+ */
+export function parseFfmpegEncodersForAvif(encodersOutput: string): string | undefined {
+  return AVIF_VIDEO_ENCODERS.find((enc) => encodersOutput.includes(enc));
+}
+
+/**
+ * Preflight: comprueba si un binario FFmpeg trae codificador AVIF antes de
+ * procesar, para avisar con un mensaje honesto en lugar de un fallo genérico.
+ */
+export async function checkFfmpegAvifEncoder(ffmpegBin = 'ffmpeg'): Promise<{
+  supported: boolean;
+  encoder?: string;
+  detail: string;
+}> {
+  let output: string;
+  try {
+    const res = await execFileAsync(ffmpegBin, ['-hide_banner', '-encoders'], {
+      timeout: 15000,
+      maxBuffer: 2 * 1024 * 1024,
+      windowsHide: true,
+    });
+    output = `${res.stdout}\n${res.stderr}`;
+  } catch (err) {
+    return {
+      supported: false,
+      detail: `No se pudo inspeccionar el binario FFmpeg ("${ffmpegBin}"): ${err instanceof Error ? summarizeToolError(err.message) : 'no disponible'}.`,
+    };
+  }
+  const found = parseFfmpegEncodersForAvif(output);
+  if (found) {
+    return {
+      supported: true,
+      encoder: found,
+      detail: `El binario FFmpeg incluye el codificador AVIF (${found}).`,
+    };
+  }
+  return {
+    supported: false,
+    detail:
+      'Esta instalación de FFmpeg no incluye codificador AVIF (ni libaom-av1, ni libsvtav1, ni librav1e). Elige WebP o PNG.',
+  };
+}
+
+/**
+ * Traduce un fallo de FFmpeg en vídeo a un error honesto (códec vs archivo dañado).
+ */
+function toHonestVideoError(err: unknown, originalName: string): Error {
+  const raw = err instanceof Error ? err.message : '';
+  if (/does not contain any stream|matches no streams|Output file is empty/i.test(raw)) {
+    return new Error(
+      `El archivo "${originalName}" no contiene pistas de vídeo o audio legibles: puede estar dañado o usar un códec no compatible.`
+    );
+  }
+  if (/Unknown (decoder|encoder)|Decoder .* not found|could not find codec|not implemented/i.test(raw)) {
+    return new Error(
+      `El códec del archivo "${originalName}" no es compatible con este FFmpeg. Prueba con otro archivo o convierte a MP4 (H.264).`
+    );
+  }
+  if (/Invalid data found|moov atom not found|corrupt|truncat/i.test(raw)) {
+    return new Error(`El archivo "${originalName}" parece estar dañado o truncado y FFmpeg no pudo leerlo.`);
+  }
+  return err instanceof Error ? err : new Error(`FFmpeg no pudo procesar el vídeo "${originalName}".`);
+}
+
+/**
  * Limpia directorios temporales y registros de tareas que superen el tiempo de retención.
  */
 export async function cleanupExpiredTasks(): Promise<number> {
@@ -249,7 +322,15 @@ async function executeServerTool(
 
     const outName = buildOutputFilename(task.originalName, resolvedFmt);
     const outPath = path.join(task.workDir, `output-${crypto.randomBytes(4).toString('hex')}.${resolvedFmt}`);
-    const info = await pipeline.toFile(outPath);
+    let info;
+    try {
+      info = await pipeline.toFile(outPath);
+    } catch (err) {
+      const cause = err instanceof Error ? summarizeToolError(err.message) : 'error desconocido del motor';
+      throw new Error(
+        `No se pudo generar la imagen de salida en formato ${resolvedFmt.toUpperCase()} desde "${task.originalName}": ${cause}`
+      );
+    }
 
     await finalizeTaskOutput(task, outPath, outName, `image/${resolvedFmt === 'jpg' ? 'jpeg' : resolvedFmt}`, `${info.width}×${info.height} px`);
     return;
@@ -602,7 +683,11 @@ ${htmlBody}
 
     args.push(outPath);
     task.progress = 55;
-    await runSafeCommand('ffmpeg', args, task.workDir);
+    try {
+      await runSafeCommand('ffmpeg', args, task.workDir);
+    } catch (err) {
+      throw toHonestVideoError(err, task.originalName);
+    }
 
     const mimeMap: Record<string, string> = {
       mp4: 'video/mp4',

@@ -74,6 +74,11 @@ def verify_magic_bytes(data: bytes, expected_ext: str) -> Tuple[bool, str]:
             return True, "image/webp"
         return False, "El archivo no tiene una cabecera RIFF/WEBP válida."
 
+    if ext == "avi":
+        if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"AVI ":
+            return True, "video/x-msvideo"
+        return False, "El archivo .avi no tiene una cabecera RIFF/AVI válida."
+
     if ext in ("zip", "docx", "xlsx", "odt", "ods", "pptx"):
         if data[:2] == b"PK":
             return True, "application/zip"

@@ -560,7 +560,9 @@ export async function createZipInBrowser(
 
     if (relPath && isSafeArchiveEntryPath(relPath)) {
       entryName = relPath
+        .replace(/\\/g, '/')
         .split('/')
+        .filter((seg) => seg && seg !== '.')
         .map((seg) => sanitizeFilename(seg))
         .join('/');
     }
@@ -626,13 +628,24 @@ export async function extractZipInBrowser(
   const extractedItems: ExtractedArchiveItem[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    if (!isSafeArchiveEntryPath(entry.name)) {
+    // Normalizar separadores Windows ("\") antes de validar: preserva las
+    // carpetas en lugar de aplanar todo al nombre base (evita colisiones).
+    const normalizedName = entry.name.replace(/\\/g, '/');
+    if (!isSafeArchiveEntryPath(normalizedName)) {
       throw new Error(`Se bloqueó una ruta insegura dentro del archivo ZIP: "${entry.name}".`);
     }
 
-    const itemBlob = await entry.async('blob');
-    const cleanName = entry.name
+    let itemBlob: Blob;
+    try {
+      itemBlob = await entry.async('blob');
+    } catch {
+      throw new Error(
+        `No se pudo extraer "${normalizedName}": puede estar cifrado con contraseña o usar un método de compresión no soportado.`
+      );
+    }
+    const cleanName = normalizedName
       .split('/')
+      .filter((s) => s && s !== '.')
       .map((s) => sanitizeFilename(s))
       .join('/');
 

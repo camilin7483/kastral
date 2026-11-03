@@ -779,7 +779,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineNotice:
       'El vídeo se sube temporalmente al servidor para ser transcodificado con FFmpeg. Sujeto al límite de tiempo de ejecución de 60 segundos por tarea.',
     acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
     outputFormats: ['mp4', 'webm', 'mkv'],
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
@@ -826,13 +826,13 @@ export const KASTRAL_TOOLS: KastralTool[] = [
       'Reduce el tamaño en megabytes de tus vídeos ajustando el factor de tasa constante (CRF) y la resolución con FFmpeg.',
     metaTitle: 'Comprimir Vídeo MP4 Gratis Online sin Marcas de Agua | Kastral',
     metaDescription:
-      'Aligera el peso de tus vídeos MP4, MOV y WebM para compartirlos por mensajería o correo electrónico sin marcas de agua.',
+      'Aligera el peso de tus vídeos MP4, MOV, AVI y WebM para compartirlos por mensajería o correo electrónico sin marcas de agua.',
     engine: 'server',
     engineBadge: 'Servidor (FFmpeg H.264 CRF)',
     engineNotice:
       'La compresión ajusta el parámetro CRF de H.264 y opcionalmente reduce la escala del vídeo en el servidor.',
-    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime'],
+    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
     outputFormats: ['mp4'],
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
@@ -896,7 +896,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineNotice:
       'FFmpeg descarta la pista de vídeo y codifica únicamente el flujo de sonido en MP3 o WAV.',
     acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
     outputFormats: ['mp3', 'wav', 'aac'],
     defaultOutputFormat: 'mp3',
     maxFileSizeMB: 50,

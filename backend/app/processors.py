@@ -1,3 +1,4 @@
+import os
 import subprocess
 import uuid
 import zipfile
@@ -10,6 +11,8 @@ def run_safe_subprocess(args: list[str], cwd: Path, timeout_sec: int = 60) -> No
     """
     Ejecuta un binario externo sin shell (shell=False) para impedir inyección
     de comandos y aplica un límite estricto de tiempo.
+    Ante un fallo, conserva la última línea de stderr (causa real) en lugar
+    de devolver solo un mensaje genérico.
     """
     result = subprocess.run(
         args,
@@ -21,7 +24,12 @@ def run_safe_subprocess(args: list[str], cwd: Path, timeout_sec: int = 60) -> No
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError("El motor de procesamiento devolvió un código de error al transformar el archivo.")
+        raw = (result.stderr or result.stdout or "").strip().splitlines()
+        cause = raw[-1].strip() if raw else "sin salida del motor"
+        cause = cause.replace(str(cwd), "[directorio-aislado]")
+        if len(cause) > 300:
+            cause = cause[:297] + "..."
+        raise RuntimeError(f"El motor de procesamiento devolvió un error: {cause}")
 
 
 def process_pdf_compression(input_path: Path, work_dir: Path, params: Dict[str, Any], timeout_sec: int) -> Tuple[Path, str]:
@@ -81,7 +89,13 @@ def process_audio_or_video_ffmpeg(
         if fmt in ("mp3", "aac", "ogg"):
             cmd.extend(["-b:a", bitrate])
         cmd.append(str(out_path))
-        run_safe_subprocess(cmd, cwd=work_dir, timeout_sec=timeout_sec)
+        try:
+            run_safe_subprocess(cmd, cwd=work_dir, timeout_sec=timeout_sec)
+        except RuntimeError as exc:
+            msg = str(exc)
+            if "matches no streams" in msg or "does not contain any stream" in msg:
+                raise RuntimeError("El archivo no contiene una pista de audio que se pueda extraer.") from exc
+            raise
         return out_path, mime
 
     # Vídeo
@@ -103,7 +117,21 @@ def process_audio_or_video_ffmpeg(
         mime = "video/mp4" if fmt == "mp4" else "video/x-matroska"
 
     cmd.append(str(out_path))
-    run_safe_subprocess(cmd, cwd=work_dir, timeout_sec=timeout_sec)
+    try:
+        run_safe_subprocess(cmd, cwd=work_dir, timeout_sec=timeout_sec)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "does not contain any stream" in msg or "matches no streams" in msg:
+            raise RuntimeError(
+                "El archivo no contiene pistas de vídeo o audio legibles: puede estar dañado o usar un códec no compatible."
+            ) from exc
+        if "Unknown decoder" in msg or "could not find codec" in msg or "not implemented" in msg:
+            raise RuntimeError(
+                f"El códec del archivo de vídeo no es compatible con este FFmpeg: {msg[-160:]}"
+            ) from exc
+        if "Invalid data found" in msg or "moov atom not found" in msg:
+            raise RuntimeError("El archivo de vídeo parece estar dañado o truncado.") from exc
+        raise
     return out_path, mime
 
 
@@ -124,7 +152,19 @@ def validate_and_extract_zip(zip_path: Path, extract_dir: Path) -> list[Path]:
                 continue
             if not is_safe_archive_path(member.filename, extract_dir):
                 raise ValueError(f"Ruta insegura bloqueada dentro del archivo ZIP: {member.filename}")
-            target_file = extract_dir / sanitize_filename(member.filename)
+            # Normalizar separadores Windows ("\\") y sanear por segmento para
+            # preservar las carpetas sin permitir escapes (Zip Slip).
+            segments = [
+                sanitize_filename(seg)
+                for seg in member.filename.replace("\\", "/").split("/")
+                if seg and seg != "."
+            ]
+            if not segments:
+                raise ValueError(f"Entrada vacía o no válida dentro del archivo ZIP: {member.filename}")
+            target_file = extract_dir.joinpath(*segments)
+            if not str(target_file.resolve()).startswith(str(extract_dir.resolve()) + os.sep):
+                raise ValueError(f"Ruta insegura bloqueada dentro del archivo ZIP: {member.filename}")
+            target_file.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(member) as src, open(target_file, "wb") as dst:
                 dst.write(src.read())
             extracted.append(target_file)

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import {
   mergePdfsInBrowser,
   splitPdfInBrowser,
@@ -95,4 +96,54 @@ test('Motor Local (Offline): crear archivo ZIP y extraer su contenido de forma s
   const extracted = await extractZipInBrowser(zipFile);
   assert.ok(extracted.extractedItems);
   assert.equal(extracted.extractedItems.length, 2);
+});
+
+test('Motor Local (Offline): extrae ZIP con .bat en subcarpetas y rutas Windows sin marcarlo dañado', async () => {
+  const zip = new JSZip();
+  zip.file('scripts/instalar.bat', '@echo off\r\necho Hola Kastral\r\n');
+  zip.file('carpeta/sub/nested.bat', 'echo nested\r\n');
+  // Nombre legítimo con puntos dobles: ya no se bloquea (se sanea a un punto, como el resto de nombres)
+  zip.file('respaldo..2024.bat', 'echo nombre legitimo con puntos dobles\r\n');
+  // Entrada tal como la escribe un ZIP creado en Windows (separador "\")
+  zip.file('scripts\\utilidades\\limpiar-win.bat', '@echo off\r\ndel /q temp\r\n');
+  const buf = await zip.generateAsync({ type: 'uint8array' });
+
+  const zipFile = new File([buf as unknown as BlobPart], 'lote-bat-win.zip', {
+    type: 'application/zip',
+  });
+  const extracted = await extractZipInBrowser(zipFile);
+
+  assert.ok(extracted.extractedItems);
+  assert.equal(extracted.extractedItems.length, 4);
+  const names = extracted.extractedItems.map((i) => i.name).sort();
+  assert.ok(names.includes('scripts/instalar.bat'), `falta instalar.bat: ${names}`);
+  assert.ok(names.includes('carpeta/sub/nested.bat'), `falta nested.bat: ${names}`);
+  assert.ok(
+    names.includes('scripts/utilidades/limpiar-win.bat'),
+    `la ruta Windows debe normalizarse preservando carpetas: ${names}`
+  );
+  assert.ok(names.includes('respaldo.2024.bat'), `nombre legítimo bloqueado: ${names}`);
+});
+
+test('Motor Local (Offline): bloquea Zip Slip real y reporta ZIP corrupto con honestidad', async () => {
+  // JSZip neutraliza "../" con barras normales al recargar, así que el vector
+  // realista (ZIP creado en Windows) usa separadores "\", que sí sobreviven.
+  const evil = new JSZip();
+  evil.file('..\\..\\evil.bat', 'echo pwned');
+  const evilBuf = await evil.generateAsync({ type: 'uint8array' });
+  const evilFile = new File([evilBuf as unknown as BlobPart], 'malicioso.zip', {
+    type: 'application/zip',
+  });
+  await assert.rejects(extractZipInBrowser(evilFile), (err: Error) => {
+    assert.ok(err.message.includes('insegura'));
+    return true;
+  });
+
+  const corrupt = new File(['esto no es un zip aunque pese algo'], 'roto.zip', {
+    type: 'application/zip',
+  });
+  await assert.rejects(extractZipInBrowser(corrupt), (err: Error) => {
+    assert.ok(err.message.includes('dañado') || err.message.includes('soportado'));
+    return true;
+  });
 });

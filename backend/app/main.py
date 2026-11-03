@@ -168,11 +168,12 @@ async def process_file_endpoint(
         except HTTPException:
             shutil.rmtree(work_dir, ignore_errors=True)
             raise
-        except Exception:
+        except Exception as exc:
             shutil.rmtree(work_dir, ignore_errors=True)
+            cause = str(exc).strip()[:300] or "error desconocido del motor"
             raise HTTPException(
                 status_code=422,
-                detail="No se pudo procesar el archivo. Verifica que el formato no esté dañado.",
+                detail=f"No se pudo procesar el archivo ({toolSlug} → {targetFormat}): {cause}",
             )
 
 

@@ -65,7 +65,9 @@ export function isSafeArchiveEntryPath(entryPath: string): boolean {
   let depth = 0;
   for (const seg of segments) {
     if (!seg || seg === '.') continue;
-    if (seg === '..' || seg.includes('..')) {
+    // Solo el segmento exacto ".." es traversal; nombres legítimos como
+    // "backup..2024.bat" o "v1..0" deben pasar (el backend usa este mismo criterio).
+    if (seg === '..') {
       return false;
     }
     depth += 1;
@@ -212,6 +214,16 @@ export function verifyMagicBytes(buffer: Uint8Array, expectedExtension: string):
     return isRiff && isWebp
       ? { valid: true, detectedType: 'image/webp' }
       : { valid: false, detectedType: 'unknown', reason: 'El archivo no tiene una cabecera RIFF/WEBP válida.' };
+  }
+
+  // AVI: RIFF....AVI  (contenedor de vídeo; la validación profunda del códec la hace FFmpeg)
+  if (ext === 'avi') {
+    const isRiff = b0 === 0x52 && b1 === 0x49 && b2 === 0x46 && b3 === 0x46;
+    const isAvi =
+      buffer.byteLength >= 12 && buffer[8] === 0x41 && buffer[9] === 0x56 && buffer[10] === 0x49 && buffer[11] === 0x20;
+    return isRiff && isAvi
+      ? { valid: true, detectedType: 'video/x-msvideo' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .avi no tiene una cabecera RIFF/AVI válida.' };
   }
 
   // ZIP / DOCX / XLSX / ODS (basados en contenedor PK\x03\x04)

@@ -24,6 +24,10 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "deb", "appimage"],
+    "publisher": "Kastral",
+    "shortDescription": "Convierte, comprime y optimiza archivos gratis y sin conexión.",
+    "longDescription": "Kastral convierte y comprime imágenes, PDF, documentos, audio, vídeo y ZIP gratis, con procesamiento local en tu equipo.",
+    "category": "Utility",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -35,11 +39,14 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "headerImage": "icons-src/nsis-header.bmp",
         "sidebarImage": "icons-src/nsis-sidebar.bmp",
         "languages": ["Spanish", "English"],
+        "displayLanguageSelector": true,
         "installMode": "currentUser",
-        "startMenuFolder": "Kastral"
+        "startMenuFolder": "Kastral",
+        "compression": "lzma"
       }
     }
   }

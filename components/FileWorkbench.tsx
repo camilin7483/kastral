@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
-import JSZip from 'jszip';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import React, { useState, useRef, useCallback, memo } from 'react';
+import type { ExtractedArchiveItem } from '@/lib/browser-processors';
 import {
   Upload,
   Trash2,
@@ -21,18 +20,8 @@ import {
   calculateReductionPercentage,
   sanitizeFilename,
 } from '@/lib/file-utils';
-import {
-  processImageInBrowser,
-  mergePdfsInBrowser,
-  splitPdfInBrowser,
-  extractPdfPagesInBrowser,
-  imagesToPdfInBrowser,
-  convertDocumentInBrowser,
-  createZipInBrowser,
-  extractZipInBrowser,
-  convertSpreadsheetInBrowser,
-  ExtractedArchiveItem,
-} from '@/lib/browser-processors';
+// Motores pesados (pdf-lib, jszip, xlsx, mammoth) solo bajo demanda:
+// este import dinámico genera un chunk separado y no crece el First Load JS.
 import { CustomSelect } from '@/components/CustomSelect';
 import { isTauri, processOnTauri } from '@/lib/tauri-engine';
 
@@ -54,12 +43,168 @@ export interface WorkbenchItem {
   details?: string;
   errorMessage?: string;
   extractedItems?: ExtractedArchiveItem[];
+  // Archivos de origen de una fusión ya completada: permite
+  // "Volver a procesar" sin exigir reselección (siguen en memoria).
+  sourceFiles?: File[];
 }
 
 interface FileWorkbenchProps {
   initialTool: KastralTool;
   allowToolSwitch?: boolean;
 }
+
+// Fila memoizada: los avisos de progreso re-renderizan solo la fila activa,
+// no toda la cola (evita tirones con lotes grandes).
+const WorkbenchQueueRow = memo(function WorkbenchQueueRow({
+  item,
+  onRemove,
+  onDownload,
+}: {
+  item: WorkbenchItem;
+  onRemove: (id: string) => void;
+  onDownload: (blob: Blob, filename: string) => void;
+}) {
+  const reduction =
+    item.status === 'completed' && item.outputSize
+      ? calculateReductionPercentage(item.originalSize, item.outputSize)
+      : null;
+
+  return (
+    <div className="p-4 bg-[#F8F5F0] dark:bg-[#18181C] hover:bg-white dark:hover:bg-[#1E1E24] transition-colors space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-[#C86D2D] dark:text-[#DF7B35] shrink-0" />
+            <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+              {item.originalName}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 font-mono tabular-nums">
+            <span>{item.originalExt}</span>
+            <span aria-hidden="true">·</span>
+            <span>Original: {formatBytes(item.originalSize)}</span>
+            {item.status === 'completed' && typeof item.outputSize === 'number' && (
+              <>
+                <span aria-hidden="true">→</span>
+                <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                  Final: {formatBytes(item.outputSize)}
+                </span>
+              </>
+            )}
+            {reduction !== null && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                  -{reduction}% de peso
+                </span>
+              </>
+            )}
+            {item.details && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-sans text-zinc-600 dark:text-zinc-400">{item.details}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {item.status === 'pending' && (
+            <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+              Listo para procesar
+            </span>
+          )}
+
+          {item.status === 'processing' && (
+            <div className="flex items-center gap-2 text-xs font-bold text-[#C86D2D] dark:text-[#DF7B35] tabular-nums">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Procesando ({item.progress}%)</span>
+            </div>
+          )}
+
+          {item.status === 'error' && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{item.errorMessage || 'Error'}</span>
+            </div>
+          )}
+
+          {item.status === 'completed' && item.outputBlob && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Completado</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => onDownload(item.outputBlob!, item.outputFilename || 'resultado')}
+                title={item.outputFilename}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#C86D2D] hover:bg-[#AD581D] rounded-xl transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+              >
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Descargar ({item.outputFilename?.split('.').pop()?.toUpperCase() || 'Archivo'})
+                </span>
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onRemove(item.id)}
+            disabled={item.status === 'processing'}
+            aria-label={`Eliminar ${item.originalName}`}
+            className="p-1.5 text-zinc-500 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {item.status === 'processing' && (
+        <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#C86D2D] transition-all duration-150"
+            style={{ width: `${Math.min(100, Math.max(5, item.progress))}%` }}
+          />
+        </div>
+      )}
+
+      {item.extractedItems && item.extractedItems.length > 0 && (
+        <div className="pt-2 pl-6 border-t border-[#DCD5CB] dark:border-[#27272D] space-y-2">
+          <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+            Archivos individuales generados ({item.extractedItems.length}):
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+            {item.extractedItems.map((sub, idx) => (
+              <div
+                key={`${sub.name}-${idx}`}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#2E2E36] text-xs"
+              >
+                <span className="truncate font-semibold text-zinc-800 dark:text-zinc-200">
+                  {sub.name}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-400">
+                    {formatBytes(sub.size)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onDownload(sub.blob, sub.name)}
+                    className="text-[#C86D2D] dark:text-[#DF7B35] hover:underline font-bold cursor-pointer"
+                  >
+                    Descargar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWorkbenchProps) {
   const [activeTool, setActiveTool] = useState<KastralTool>(initialTool);
@@ -148,10 +293,10 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     [activeTool, items.length, targetFormat]
   );
 
-  const removeItem = (id: string) => {
+  const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
     setGlobalError(null);
-  };
+  }, []);
 
   const clearAll = () => {
     setItems([]);
@@ -251,24 +396,25 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
    */
   const executeItemLocallyInBrowser = async (item: WorkbenchItem, slug: string, fmt: string) => {
     const onPct = (pct: number) => updateItemState(item.id, { progress: pct });
+    const processors = await import('@/lib/browser-processors');
 
     if (['convertir-imagen', 'comprimir-imagen', 'redimensionar-imagen'].includes(slug)) {
-      return processImageInBrowser(item.file, fmt, params, onPct);
+      return processors.processImageInBrowser(item.file, fmt, params, onPct);
     }
     if (slug === 'dividir-pdf') {
-      return splitPdfInBrowser(item.file, onPct);
+      return processors.splitPdfInBrowser(item.file, onPct);
     }
     if (slug === 'extraer-paginas-pdf') {
-      return extractPdfPagesInBrowser(item.file, params, onPct);
+      return processors.extractPdfPagesInBrowser(item.file, params, onPct);
     }
     if (slug === 'convertir-documento') {
-      return convertDocumentInBrowser(item.file, fmt, onPct);
+      return processors.convertDocumentInBrowser(item.file, fmt, onPct);
     }
     if (slug === 'convertir-hoja-calculo') {
-      return convertSpreadsheetInBrowser(item.file, fmt, params, onPct);
+      return processors.convertSpreadsheetInBrowser(item.file, fmt, params, onPct);
     }
     if (slug === 'extraer-zip') {
-      return extractZipInBrowser(item.file, onPct);
+      return processors.extractZipInBrowser(item.file, onPct);
     }
     throw new Error('Operación no reconocida.');
   };
@@ -286,7 +432,11 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     try {
       // Operaciones que fusionan múltiples archivos en una única salida en el navegador
       if (activeTool.mergesIntoSingleOutput) {
-        const filesToMerge = validItems.map((it) => it.file);
+        const processors = await import('@/lib/browser-processors');
+        const filesToMerge =
+          validItems.length === 1 && (validItems[0].sourceFiles?.length ?? 0) > 0
+            ? validItems[0].sourceFiles!
+            : validItems.map((it) => it.file);
         for (const it of validItems) {
           updateItemState(it.id, { status: 'processing', progress: 10, errorMessage: undefined });
         }
@@ -299,11 +449,11 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
 
         let mergedResult;
         if (activeTool.slug === 'combinar-pdf') {
-          mergedResult = await mergePdfsInBrowser(filesToMerge, params, onSharedProgress);
+          mergedResult = await processors.mergePdfsInBrowser(filesToMerge, params, onSharedProgress);
         } else if (activeTool.slug === 'imagenes-a-pdf') {
-          mergedResult = await imagesToPdfInBrowser(filesToMerge, params, onSharedProgress);
+          mergedResult = await processors.imagesToPdfInBrowser(filesToMerge, params, onSharedProgress);
         } else if (activeTool.slug === 'crear-zip') {
-          mergedResult = await createZipInBrowser(filesToMerge, params, onSharedProgress);
+          mergedResult = await processors.createZipInBrowser(filesToMerge, params, onSharedProgress);
         }
 
         if (mergedResult && mergedResult.outputSize > 0) {
@@ -326,6 +476,8 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
               outputSize: mergedResult.outputSize,
               outputBlob: mergedResult.outputBlob,
               details: mergedResult.details,
+              // Conserva los archivos de origen en memoria para "Volver a procesar".
+              sourceFiles: filesToMerge,
             },
           ]);
         }
@@ -408,6 +560,7 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     }
 
     if (cat === 'pdf') {
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
       const doc = await PDFDocument.create();
       const font = await doc.embedFont(StandardFonts.Helvetica);
 
@@ -482,6 +635,7 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     }
 
     if (activeTool.slug === 'extraer-zip') {
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       zip.file('leeme-kastral.txt', 'Archivo de texto dentro del paquete ZIP de prueba.');
       zip.file('datos/configuracion.json', JSON.stringify({ plataforma: 'Kastral', offline: true }, null, 2));
@@ -533,7 +687,7 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     }
   };
 
-  const triggerDownloadBlob = (blob: Blob, filename: string) => {
+  const triggerDownloadBlob = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -542,12 +696,13 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-  };
+  }, []);
 
   const handleDownloadAllAsZip = async () => {
     const completed = items.filter((it) => it.status === 'completed');
     if (completed.length === 0) return;
 
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     for (const item of completed) {
       const name = item.outputFilename || `resultado-${item.originalName}`;
@@ -698,19 +853,31 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-3 border-t border-[#DCD5CB]/70 dark:border-[#27272D]">
           {/* Selector de Formato de Salida */}
           <div className="md:col-span-4 space-y-2">
-            <label
-              htmlFor="output-format-select"
+            <span
+              id="output-format-select"
               className="block text-xs font-bold text-zinc-800 dark:text-zinc-200"
             >
               Formato de salida
-            </label>
-            <CustomSelect
-              id="output-format-select"
-              value={targetFormat}
-              options={outputFormatOptions}
-              onChange={setTargetFormat}
-              disabled={activeTool.outputFormats.length <= 1}
-            />
+            </span>
+            {activeTool.outputFormats.length <= 1 ? (
+              <p
+                aria-labelledby="output-format-select"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-bold rounded-xl border border-[#D5CEC4] dark:border-[#2E2E36] bg-[#F8F5F0] dark:bg-[#18181B] text-zinc-900 dark:text-zinc-100"
+              >
+                <FileText className="w-4 h-4 text-[#C86D2D] dark:text-[#DF7B35] shrink-0" />
+                <span>{outputFormatOptions[0]?.label ?? targetFormat.toUpperCase()}</span>
+                <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  · único disponible
+                </span>
+              </p>
+            ) : (
+              <CustomSelect
+                id="output-format-select"
+                value={targetFormat}
+                options={outputFormatOptions}
+                onChange={setTargetFormat}
+              />
+            )}
           </div>
 
           {/* Parámetros específicos de la herramienta */}
@@ -838,158 +1005,14 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
             </div>
 
             <div className="border border-[#DCD5CB] dark:border-[#27272D] rounded-xl divide-y divide-[#DCD5CB] dark:divide-[#27272D] overflow-hidden">
-              {items.map((item) => {
-                const reduction =
-                  item.status === 'completed' && item.outputSize
-                    ? calculateReductionPercentage(item.originalSize, item.outputSize)
-                    : null;
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-4 bg-[#F8F5F0] dark:bg-[#18181C] hover:bg-white dark:hover:bg-[#1E1E24] transition-colors space-y-3"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-[#C86D2D] dark:text-[#DF7B35] shrink-0" />
-                          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                            {item.originalName}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 font-mono tabular-nums">
-                          <span>{item.originalExt}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>Original: {formatBytes(item.originalSize)}</span>
-                          {item.status === 'completed' && typeof item.outputSize === 'number' && (
-                            <>
-                              <span aria-hidden="true">→</span>
-                              <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                                Final: {formatBytes(item.outputSize)}
-                              </span>
-                            </>
-                          )}
-                          {reduction !== null && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                                -{reduction}% de peso
-                              </span>
-                            </>
-                          )}
-                          {item.details && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="font-sans text-zinc-600 dark:text-zinc-400">
-                                {item.details}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                        {item.status === 'pending' && (
-                          <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                            Listo para procesar
-                          </span>
-                        )}
-
-                        {item.status === 'processing' && (
-                          <div className="flex items-center gap-2 text-xs font-bold text-[#C86D2D] dark:text-[#DF7B35] tabular-nums">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Procesando ({item.progress}%)</span>
-                          </div>
-                        )}
-
-                        {item.status === 'error' && (
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span>{item.errorMessage || 'Error'}</span>
-                          </div>
-                        )}
-
-                        {item.status === 'completed' && item.outputBlob && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
-                              <span>Completado</span>
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                triggerDownloadBlob(
-                                  item.outputBlob!,
-                                  item.outputFilename || 'resultado'
-                                )
-                              }
-                              title={item.outputFilename}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#C86D2D] hover:bg-[#AD581D] rounded-xl transition-colors cursor-pointer whitespace-nowrap shadow-xs"
-                            >
-                              <Download className="w-3.5 h-3.5 shrink-0" />
-                              <span>
-                                Descargar ({item.outputFilename?.split('.').pop()?.toUpperCase() || 'Archivo'})
-                              </span>
-                            </button>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => removeItem(item.id)}
-                          disabled={item.status === 'processing'}
-                          aria-label={`Eliminar ${item.originalName}`}
-                          className="p-1.5 text-zinc-500 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors disabled:opacity-40 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {item.status === 'processing' && (
-                      <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#C86D2D] transition-all duration-150"
-                          style={{ width: `${Math.min(100, Math.max(5, item.progress))}%` }}
-                        />
-                      </div>
-                    )}
-
-                    {item.extractedItems && item.extractedItems.length > 0 && (
-                      <div className="pt-2 pl-6 border-t border-[#DCD5CB] dark:border-[#27272D] space-y-2">
-                        <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                          Archivos individuales generados ({item.extractedItems.length}):
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                          {item.extractedItems.map((sub, idx) => (
-                            <div
-                              key={`${sub.name}-${idx}`}
-                              className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#2E2E36] text-xs"
-                            >
-                              <span className="truncate font-semibold text-zinc-800 dark:text-zinc-200">
-                                {sub.name}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-mono tabular-nums text-zinc-600 dark:text-zinc-400">
-                                  {formatBytes(sub.size)}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => triggerDownloadBlob(sub.blob, sub.name)}
-                                  className="text-[#C86D2D] dark:text-[#DF7B35] hover:underline font-bold cursor-pointer"
-                                >
-                                  Descargar
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {items.map((item) => (
+                <WorkbenchQueueRow
+                  key={item.id}
+                  item={item}
+                  onRemove={removeItem}
+                  onDownload={triggerDownloadBlob}
+                />
+              ))}
             </div>
 
             {/* Botón Principal de Ejecución */}

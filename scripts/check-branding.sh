@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.."
 
 PATTERN='ai-studio|ai_studio|aistudio|applet'
 # Rutas y artefactos que nunca son código fuente (ni deben auditarse).
-EXCLUDES='^(node_modules/|src-tauri/target/|\.next/|out/|coverage/|\.git/|public/assets/brand/|\.aistudio/)'
+# (este mismo script se autoexcluye: su trabajo es nombrar los patrones).
+EXCLUDES='^(node_modules/|src-tauri/target/|\.next/|out/|coverage/|\.git/|public/assets/brand/|\.aistudio/|scripts/check-branding\.sh)'
 
 hits=$(git grep -l -i -E "$PATTERN" -- . ':!bun.lock' ':!package-lock.json' 2>/dev/null | grep -v -E "$EXCLUDES" || true)
 

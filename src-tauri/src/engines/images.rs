@@ -10,7 +10,7 @@ use super::{
     EngineOutput,
 };
 
-const FORMATS: [&str; 4] = ["png", "jpg", "webp", "avif"];
+const FORMATS: [&str; 6] = ["png", "jpg", "webp", "avif", "tiff", "bmp"];
 
 fn mime_of(fmt: &str) -> &'static str {
     match fmt {
@@ -18,18 +18,30 @@ fn mime_of(fmt: &str) -> &'static str {
         "png" => "image/png",
         "webp" => "image/webp",
         "avif" => "image/avif",
+        "tiff" => "image/tiff",
+        "bmp" => "image/bmp",
         _ => "image/webp",
     }
 }
 
 pub(crate) fn resolve_format(input: &Path, target: &str) -> Result<String, String> {
     let t = target.to_lowercase();
+    // HEIC verificado: ni el sidecar ni FFmpeg de escritorio traen
+    // multiplexor HEIF (`-muxers` sin heif/heic), así que no se oferta.
+    if t == "heic" || t == "heif" {
+        return Err(String::from(
+            "El formato HEIC no es compatible en esta instalación (el motor FFmpeg no trae codificador HEIF). Elige AVIF o WebP.",
+        ));
+    }
+    if t == "tif" {
+        return Ok(String::from("tiff"));
+    }
     if t != "keep" {
         return if FORMATS.contains(&t.as_str()) {
             Ok(t)
         } else {
             Err(String::from(
-                "El formato de imagen no es compatible. Usa PNG, JPG, WebP o AVIF.",
+                "El formato de imagen no es compatible. Usa PNG, JPG, WebP, AVIF, TIFF o BMP.",
             ))
         };
     }
@@ -106,6 +118,16 @@ pub fn process(
     }
     let fit = str_param(params, "fit").unwrap_or_else(|| String::from("inside"));
 
+    // HEIC de entrada: sin demuxer HEIF tampoco se puede leer.
+    if let Some(ext) = input.extension().and_then(|e| e.to_str()) {
+        let e = ext.to_lowercase();
+        if e == "heic" || e == "heif" {
+            return Err(String::from(
+                "El motor FFmpeg de esta instalación no puede leer imágenes HEIC (falta el decodificador HEIF).",
+            ));
+        }
+    }
+
     let ffmpeg = find_bin("ffmpeg")?;
     let out_name = build_output_filename(original_name, &fmt, None);
     let out_path = workdir.join(format!("output-img.{fmt}"));
@@ -132,8 +154,10 @@ pub fn process(
             args.push("-q:v".into());
             // Map quality 10-100 to mjpeg q 31-2 (lower is better).
             args.push((31 - (quality * 29 / 100)).to_string());
+            // Rango completo: el estándar JPEG; el limitado (yuv420p) lo
+            // rechaza FFmpeg 7 (sidecar) con "Non full-range YUV".
             args.push("-pix_fmt".into());
-            args.push("yuv420p".into());
+            args.push("yuvj420p".into());
         }
         "webp" => {
             args.push("-c:v".into());
@@ -150,6 +174,15 @@ pub fn process(
             args.push("-crf".into());
             // Map quality 10-100 to CRF 32-8.
             args.push((32 - (quality * 24 / 100)).to_string());
+        }
+        // TIFF/BMP: encoders propios vía image2 (sin deps nuevas).
+        "tiff" => {
+            args.push("-c:v".into());
+            args.push("tiff".into());
+        }
+        "bmp" => {
+            args.push("-c:v".into());
+            args.push("bmp".into());
         }
         _ => unreachable!(),
     }
@@ -251,8 +284,28 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_format() {
-        let err = resolve_format(Path::new("f.png"), "bmp").unwrap_err();
+        let err = resolve_format(Path::new("f.png"), "gif").unwrap_err();
         assert!(err.contains("no es compatible"));
+        // HEIC: error honesto (sin muxer HEIF), no formato fantasma.
+        let err = resolve_format(Path::new("f.png"), "heic").unwrap_err();
+        assert!(err.contains("HEIC"), "mensaje: {err}");
+        // TIF es alias de TIFF.
+        assert_eq!(resolve_format(Path::new("f.png"), "tif").unwrap(), "tiff");
+    }
+
+    #[test]
+    fn rejects_heic_input_honestly() {
+        let dir = std::env::temp_dir();
+        let err = process(
+            "convert",
+            Path::new("foto.heic"),
+            "foto.heic",
+            "jpg",
+            &serde_json::json!({}),
+            &dir,
+        )
+        .unwrap_err();
+        assert!(err.contains("HEIC"), "mensaje: {err}");
     }
 
     #[test]
@@ -288,6 +341,50 @@ mod tests {
         assert_eq!(out.mime, "image/jpeg");
         assert!(out.path.is_file());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn converts_generated_png_to_webp_tiff_bmp() {
+        // Un test por formato nuevo: fixture PNG generada con el FFmpeg
+        // del sistema (0 network), igual que los tests existentes.
+        let cases = [
+            ("webp", "image/webp"),
+            ("tiff", "image/tiff"),
+            ("bmp", "image/bmp"),
+        ];
+        for (fmt, mime) in cases {
+            let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
+            let dir = std::env::temp_dir().join(format!("kastral-img-{fmt}-test"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let input = dir.join("in.png");
+            let status = Command::new(&ffmpeg)
+                .args([
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc=size=32x32:duration=1:rate=1",
+                    "-frames:v",
+                    "1",
+                ])
+                .arg(&input)
+                .output()
+                .unwrap();
+            assert!(status.status.success());
+            let out = process(
+                "convert",
+                &input,
+                "in.png",
+                fmt,
+                &serde_json::json!({"quality": 70}),
+                &dir,
+            )
+            .unwrap_or_else(|e| panic!("formato {fmt}: {e}"));
+            assert_eq!(out.mime, mime, "formato {fmt}");
+            assert!(out.path.is_file(), "formato {fmt}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]

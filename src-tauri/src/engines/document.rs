@@ -462,6 +462,129 @@ fn default_font_family() -> Result<genpdf::fonts::FontFamily<genpdf::fonts::Font
     })
 }
 
+/// Divide los bloques en capítulos: cada Heading abre uno nuevo con su
+/// texto como título. Sin encabezados queda un único capítulo.
+fn split_chapters(blocks: &[Block]) -> Vec<(String, Vec<Block>)> {
+    let mut chapters: Vec<(String, Vec<Block>)> = vec![(String::from("Contenido"), Vec::new())];
+    for b in blocks {
+        match b {
+            Block::Heading(s) => chapters.push((s.clone(), Vec::new())),
+            Block::Paragraph(_) => chapters.last_mut().unwrap().1.push(b.clone()),
+        }
+    }
+    if chapters.len() > 1 && chapters[0].1.is_empty() {
+        chapters.remove(0);
+    }
+    chapters
+}
+
+fn runs_to_xhtml(runs: &[Run]) -> String {
+    let mut p = String::new();
+    for r in runs {
+        let mut t = escape_html(&r.text).replace('\n', "<br/>");
+        if r.bold {
+            t = format!("<strong>{t}</strong>");
+        }
+        if r.italic {
+            t = format!("<em>{t}</em>");
+        }
+        p.push_str(&t);
+    }
+    p
+}
+
+/// Libro EPUB3 en memoria (solo std + zip, sin compresión STORE para
+/// `mimetype`, que OCF exige primera y sin comprimir; el resto Deflated).
+fn blocks_to_epub(title: &str, blocks: &[Block]) -> Result<Vec<u8>, String> {
+    let chapters = split_chapters(blocks);
+    let mut manifest = String::new();
+    let mut spine = String::new();
+    let mut nav_items = String::new();
+    for (i, (name, _)) in chapters.iter().enumerate() {
+        manifest.push_str(&format!(
+            "<item id=\"c{i}\" href=\"cap{i}.xhtml\" media-type=\"application/xhtml+xml\"/>\n"
+        ));
+        spine.push_str(&format!("<itemref idref=\"c{i}\"/>\n"));
+        nav_items.push_str(&format!(
+            "<li><a href=\"cap{i}.xhtml\">{}</a></li>\n",
+            escape_html(name)
+        ));
+    }
+    let container = r#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>"#;
+    let opf = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title>{}</dc:title>
+<dc:language>es</dc:language>
+<dc:identifier id="uid">kastral-epub</dc:identifier>
+<meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+</metadata>
+<manifest>
+<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+{manifest}</manifest>
+<spine>
+{spine}</spine>
+</package>"#,
+        escape_html(title)
+    );
+    let nav = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Índice</title></head>
+<body><nav epub:type="toc"><ol>
+{nav_items}</ol></nav></body>
+</html>"#
+    );
+
+    let stored =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let deflated = zip::write::SimpleFileOptions::default();
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    // `mimetype` DEBE ser la primera entrada y sin comprimir (OCF).
+    zip.start_file("mimetype", stored)
+        .map_err(|_| String::from("No se pudo generar el libro EPUB."))?;
+    std::io::Write::write_all(&mut zip, b"application/epub+zip")
+        .map_err(|_| String::from("No se pudo generar el libro EPUB."))?;
+    let mut files: Vec<(String, String)> = vec![
+        (
+            String::from("META-INF/container.xml"),
+            container.to_string(),
+        ),
+        (String::from("OEBPS/content.opf"), opf),
+        (String::from("OEBPS/nav.xhtml"), nav),
+    ];
+    for (i, (name, paras)) in chapters.iter().enumerate() {
+        let mut body = format!("<h1>{}</h1>\n", escape_html(name));
+        for b in paras {
+            if let Block::Paragraph(runs) = b {
+                if runs.iter().any(|r| !r.text.trim().is_empty()) {
+                    body.push_str(&format!("<p>{}</p>\n", runs_to_xhtml(runs)));
+                }
+            }
+        }
+        files.push((
+            format!("OEBPS/cap{i}.xhtml"),
+            format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head><title>{}</title></head>\n<body>\n{body}</body>\n</html>",
+                escape_html(name)
+            ),
+        ));
+    }
+    for (name, data) in &files {
+        zip.start_file(name, deflated)
+            .map_err(|_| String::from("No se pudo generar el libro EPUB."))?;
+        std::io::Write::write_all(&mut zip, data.as_bytes())
+            .map_err(|_| String::from("No se pudo generar el libro EPUB."))?;
+    }
+    zip.finish()
+        .map(|c| c.into_inner())
+        .map_err(|_| String::from("No se pudo generar el libro EPUB."))
+}
+
 /// Render blocks to PDF bytes: A4 page, headings larger and bold, default
 /// line spacing.
 fn blocks_to_pdf(title: &str, blocks: &[Block]) -> Result<Vec<u8>, String> {
@@ -593,8 +716,26 @@ pub fn process(
                 details: format!("PDF A4 con texto y títulos{suffix}"),
             })
         }
+        "epub" => {
+            let bytes = blocks_to_epub(original_name, &blocks)?;
+            let out_path = workdir.join("output-doc.epub");
+            std::fs::write(&out_path, &bytes)
+                .map_err(|_| String::from("No se pudo escribir el libro EPUB."))?;
+            Ok(EngineOutput {
+                path: out_path,
+                filename: build_output_filename(original_name, "epub", None),
+                mime: String::from("application/epub+zip"),
+                details: format!("Libro EPUB con texto y títulos{suffix}"),
+            })
+        }
+        // PDF/A solo si el perfil de Ghostscript existe en la máquina: en
+        // esta instalación no está (`/usr/share/ghostscript/*/lib/PDFA_def.psf`
+        // no resuelve), así que error honesto en lugar de PDF fantasma.
+        "pdfa" => Err(String::from(
+            "La exportación a PDF/A no está disponible en esta instalación (falta el perfil necesario de Ghostscript).",
+        )),
         _ => Err(String::from(
-            "Conversión no compatible en escritorio: convierte DOCX, Markdown o texto a PDF, HTML o texto plano.",
+            "Conversión no compatible en escritorio: convierte DOCX, Markdown o texto a PDF, EPUB, HTML o texto plano.",
         )),
     }
 }
@@ -751,6 +892,71 @@ mod tests {
         let out = process(&input, "doc.docx", "txt", &dir).unwrap();
         let text = std::fs::read_to_string(&out.path).unwrap();
         assert!(text.contains("Hola mundo"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn md_to_epub_is_valid_ocf() {
+        let dir = workdir("epub");
+        let input = dir.join("nota.md");
+        std::fs::write(&input, "# Uno\n\nHola **mundo**.\n\n# Dos\n\nAdiós.\n").unwrap();
+        let out = process(&input, "nota.md", "epub", &dir).unwrap();
+        assert_eq!(out.mime, "application/epub+zip");
+        let bytes = std::fs::read(&out.path).unwrap();
+        assert!(bytes.starts_with(b"PK"), "el EPUB es un ZIP");
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+        // OCF: `mimetype` primera entrada y sin comprimir (STORE).
+        let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
+        assert_eq!(names[0], "mimetype");
+        assert!(names.contains(&"META-INF/container.xml".to_string()));
+        assert!(names.contains(&"OEBPS/content.opf".to_string()));
+        assert!(names.contains(&"OEBPS/nav.xhtml".to_string()));
+        assert!(names.contains(&"OEBPS/cap0.xhtml".to_string()));
+        assert!(names.contains(&"OEBPS/cap1.xhtml".to_string()));
+        let mut mimetype = String::new();
+        zip.by_name("mimetype")
+            .unwrap()
+            .read_to_string(&mut mimetype)
+            .unwrap();
+        assert_eq!(mimetype, "application/epub+zip");
+        assert_eq!(
+            zip.by_name("mimetype").unwrap().compression(),
+            zip::CompressionMethod::Stored
+        );
+        let mut opf = String::new();
+        zip.by_name("OEBPS/content.opf")
+            .unwrap()
+            .read_to_string(&mut opf)
+            .unwrap();
+        assert!(opf.contains("cap0.xhtml") && opf.contains("cap1.xhtml"));
+        assert!(opf.contains("properties=\"nav\""));
+        let mut cap0 = String::new();
+        zip.by_name("OEBPS/cap0.xhtml")
+            .unwrap()
+            .read_to_string(&mut cap0)
+            .unwrap();
+        assert!(cap0.contains("<h1>Uno</h1>") && cap0.contains("<strong>mundo</strong>"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pdfa_is_honest_without_ghostscript_profile() {
+        // Precondición del contrato: el glob literal
+        // `/usr/share/ghostscript/*/lib/PDFA_def.psf` no resuelve aquí.
+        let gs = std::path::Path::new("/usr/share/ghostscript");
+        let has_psf = gs
+            .read_dir()
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .any(|e| e.path().join("lib/PDFA_def.psf").is_file())
+            })
+            .unwrap_or(false);
+        assert!(!has_psf, "esta máquina sí trae el perfil PDF/A");
+        let dir = workdir("pdfa");
+        let input = dir.join("nota.md");
+        std::fs::write(&input, "Hola").unwrap();
+        let err = process(&input, "nota.md", "pdfa", &dir).unwrap_err();
+        assert!(err.contains("PDF/A"), "mensaje: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

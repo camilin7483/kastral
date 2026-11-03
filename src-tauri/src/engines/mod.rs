@@ -386,6 +386,74 @@ mod tests {
     }
 
     #[test]
+    fn accepts_extended_video_inputs() {
+        // FLV: "FLV" + versión.
+        let flv = *b"FLV\x01\x05\x00\x00\x00\x09\x00\x00\x00";
+        assert_eq!(flv.len(), 12);
+        assert!(validate_input(&flv, "clip.flv").is_ok());
+        // WMV: cabecera ASF (30 26 B2 75 ...).
+        let wmv = [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0];
+        assert!(validate_input(&wmv, "clip.wmv").is_ok());
+        // MPG/MPEG: arranque 00 00 01 Bx.
+        let mpg = [0x00, 0x00, 0x01, 0xBA, 0x44, 0, 0, 0, 0, 0, 0, 0];
+        assert!(validate_input(&mpg, "clip.mpg").is_ok());
+        assert!(validate_input(&mpg, "clip.mpeg").is_ok());
+        // M4V/3GP: caja ftyp (contenedor MOV).
+        let m4v = *b"....ftypmp42";
+        assert_eq!(m4v.len(), 12);
+        assert!(validate_input(&m4v, "clip.m4v").is_ok());
+        assert!(validate_input(&m4v, "clip.3gp").is_ok());
+        // OGV: "OggS".
+        let ogv = *b"OggS\x00\x02\x00\x00\x00\x00\x00\x00";
+        assert_eq!(ogv.len(), 12);
+        assert!(validate_input(&ogv, "clip.ogv").is_ok());
+    }
+
+    #[test]
+    fn accepts_extended_audio_inputs() {
+        // AAC: sincronía ADTS (FF F1).
+        let aac = [0xFF, 0xF1, 0x50, 0x80, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert!(validate_input(&aac, "tema.aac").is_ok());
+        // M4A: caja ftyp.
+        let m4a = *b"....ftypM4A ";
+        assert_eq!(m4a.len(), 12);
+        assert!(validate_input(&m4a, "tema.m4a").is_ok());
+        // FLAC: "fLaC".
+        let flac = *b"fLaC\x00\x00\x00\x22\x10\x10\x10\x10";
+        assert_eq!(flac.len(), 12);
+        assert!(validate_input(&flac, "tema.flac").is_ok());
+        // OGG/Opus: "OggS".
+        let ogg = *b"OggS\x00\x02\x00\x00\x00\x00\x00\x00";
+        assert!(validate_input(&ogg, "tema.ogg").is_ok());
+        assert!(validate_input(&ogg, "tema.opus").is_ok());
+        // WMA: cabecera ASF.
+        let wma = [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0, 0, 0, 0];
+        assert!(validate_input(&wma, "tema.wma").is_ok());
+        // AIFF: "FORM....AIFF".
+        let aiff = *b"FORM\x00\x00\x00\x00AIFF";
+        assert_eq!(aiff.len(), 12);
+        assert!(validate_input(&aiff, "tema.aiff").is_ok());
+        // MP2: sincronía de trama (FF FB).
+        let mp2 = [0xFF, 0xFB, 0x90, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert!(validate_input(&mp2, "tema.mp2").is_ok());
+    }
+
+    #[test]
+    fn accepts_extended_image_inputs() {
+        // TIFF little-endian (II*\0) y big-endian (MM\0*).
+        let tiff_le = [0x49, 0x49, 0x2A, 0x00, 8, 0, 0, 0, 0, 0, 0, 0];
+        assert!(validate_input(&tiff_le, "foto.tiff").is_ok());
+        let tiff_be = [0x4D, 0x4D, 0x00, 0x2A, 0, 0, 0, 8, 0, 0, 0, 0];
+        assert!(validate_input(&tiff_be, "foto.tif").is_ok());
+        // HEIF/HEIC: se acepta en validación; el error honesto lo da el
+        // motor al no haber demuxer HEIF (ver images::process).
+        let heic = *b"....ftypheic";
+        assert_eq!(heic.len(), 12);
+        assert!(validate_input(&heic, "foto.heic").is_ok());
+        assert!(validate_input(&heic, "foto.heif").is_ok());
+    }
+
+    #[test]
     fn workdir_is_exclusive_and_private() {
         let a = make_workdir();
         let b = make_workdir();

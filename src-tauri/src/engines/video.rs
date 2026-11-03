@@ -10,12 +10,17 @@ use super::{
     user_error_from_stderr, EngineOutput,
 };
 
-pub(crate) fn resolve(fmt_in: &str) -> &'static str {
+pub(crate) fn resolve(fmt_in: &str) -> Result<&'static str, String> {
     match fmt_in.to_lowercase().as_str() {
-        "mp4" => "mp4",
-        "webm" => "webm",
-        "mkv" => "mkv",
-        _ => "mp4",
+        "mp4" => Ok("mp4"),
+        "webm" => Ok("webm"),
+        "mkv" => Ok("mkv"),
+        "mov" => Ok("mov"),
+        "avi" => Ok("avi"),
+        "flv" => Ok("flv"),
+        _ => Err(String::from(
+            "El formato de vídeo no es compatible. Usa MP4, WebM, MKV, MOV, AVI o FLV.",
+        )),
     }
 }
 
@@ -33,6 +38,16 @@ pub(crate) fn resolve_res(params: &Value) -> &'static str {
         Some("1280") => "1280",
         Some("854") => "854",
         _ => "original",
+    }
+}
+
+/// Calidad q:v para el encoder mpeg4 (AVI), que ignora -crf en silencio:
+/// se mapea el CRF elegido a un q fijo para que "comprimir" sí cambie algo.
+pub(crate) fn avi_q(crf: &str) -> &'static str {
+    match crf {
+        "24" => "2",
+        "33" => "7",
+        _ => "4",
     }
 }
 
@@ -61,7 +76,24 @@ pub(crate) fn build_args(fmt: &str, crf: &str, res: &str, input: &str, out: &str
             .iter()
             .map(|s| s.to_string()),
         );
-    } else {
+    } else if fmt == "avi" {
+        // AVI: mpeg4 + mp3 (códecs del contrato); mpeg4 no entiende -crf.
+        args.extend(
+            [
+                "-c:v",
+                "mpeg4",
+                "-q:v",
+                avi_q(crf),
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "128k",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+    } else if fmt == "flv" {
+        // FLV: h264 + mp3 (códecs del contrato).
         args.extend(
             [
                 "-c:v",
@@ -72,16 +104,26 @@ pub(crate) fn build_args(fmt: &str, crf: &str, res: &str, input: &str, out: &str
                 crf,
                 "-pix_fmt",
                 "yuv420p",
-                "-movflags",
-                "+faststart",
                 "-c:a",
-                "aac",
+                "libmp3lame",
                 "-b:a",
                 "128k",
             ]
             .iter()
             .map(|s| s.to_string()),
         );
+    } else {
+        // MP4/MKV/MOV: h264 + aac; MOV usa los mismos códecs que MP4.
+        // `faststart` solo existe en el multiplexor mov/mp4 (con mkv falla).
+        let mut combo: Vec<&str> = vec![
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", crf, "-pix_fmt", "yuv420p",
+        ];
+        if fmt == "mp4" || fmt == "mov" {
+            combo.push("-movflags");
+            combo.push("+faststart");
+        }
+        combo.extend(["-c:a", "aac", "-b:a", "128k"]);
+        args.extend(combo.iter().map(|s| s.to_string()));
     }
     args.push(out.to_string());
     args
@@ -95,7 +137,7 @@ pub fn process(
     params: &Value,
     workdir: &Path,
 ) -> Result<EngineOutput, String> {
-    let fmt = resolve(target_format);
+    let fmt = resolve(target_format)?;
     let crf = resolve_crf(params);
     let res = resolve_res(params);
 
@@ -138,6 +180,9 @@ pub fn process(
     let mime = match fmt {
         "mp4" => "video/mp4",
         "webm" => "video/webm",
+        "mov" => "video/quicktime",
+        "avi" => "video/x-msvideo",
+        "flv" => "video/x-flv",
         _ => "video/x-matroska",
     };
     let res_tag = if res != "original" {
@@ -160,15 +205,96 @@ mod tests {
 
     #[test]
     fn whitelists_and_arg_shape_match_server() {
-        assert_eq!(resolve("AVI"), "mp4");
+        assert_eq!(resolve("mov").unwrap(), "mov");
+        assert_eq!(resolve("AVI").unwrap(), "avi");
+        assert!(resolve("wmv").is_err());
         assert_eq!(resolve_crf(&serde_json::json!({"crf": "99"})), "28");
         assert_eq!(
             resolve_res(&serde_json::json!({"resolution": "720"})),
             "original"
         );
+        assert_eq!(avi_q("24"), "2");
+        assert_eq!(avi_q("33"), "7");
         let args = build_args("webm", "28", "1280", "in.mp4", "out.webm");
         assert!(args.contains(&"libvpx-vp9".to_string()));
         assert!(args.iter().any(|a| a.contains("min(1280,iw)")));
+        let args = build_args("avi", "28", "original", "in.mp4", "out.avi");
+        assert!(args.contains(&"mpeg4".to_string()));
+        assert!(args.contains(&"libmp3lame".to_string()));
+        let args = build_args("flv", "28", "original", "in.mp4", "out.flv");
+        assert!(args.contains(&"libx264".to_string()));
+        assert!(args.contains(&"libmp3lame".to_string()));
+        let args = build_args("mkv", "28", "original", "in.mp4", "out.mkv");
+        assert!(!args.contains(&"+faststart".to_string()));
+        let args = build_args("mov", "28", "original", "in.mp4", "out.mov");
+        assert!(args.contains(&"+faststart".to_string()));
+    }
+
+    /// Genera un MP4 válido (64x64, 1 s) con el FFmpeg del sistema.
+    fn gen_mp4(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
+        let input = dir.join(name);
+        let status = Command::new(&ffmpeg)
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=64x64:duration=1:rate=5",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        input
+    }
+
+    fn convert_case(fmt: &str, mime: &str) {
+        let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
+        let _ = ffmpeg;
+        let dir = std::env::temp_dir().join(format!("kastral-vid-{fmt}-test"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = gen_mp4(&dir, "in.mp4");
+        let out = process(
+            "convert",
+            &input,
+            "in.mp4",
+            fmt,
+            &serde_json::json!({"crf": "28"}),
+            &dir,
+        )
+        .unwrap();
+        assert_eq!(out.mime, mime);
+        assert!(out.path.is_file());
+        assert!(out.path.extension().and_then(|e| e.to_str()) == Some(fmt));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn converts_generated_mp4_to_mov() {
+        convert_case("mov", "video/quicktime");
+    }
+
+    #[test]
+    fn converts_generated_mp4_to_mkv() {
+        convert_case("mkv", "video/x-matroska");
+    }
+
+    #[test]
+    fn converts_generated_mp4_to_avi() {
+        convert_case("avi", "video/x-msvideo");
+    }
+
+    #[test]
+    fn converts_generated_mp4_to_flv() {
+        convert_case("flv", "video/x-flv");
     }
 
     #[test]

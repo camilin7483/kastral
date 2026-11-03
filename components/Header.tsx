@@ -77,13 +77,13 @@ export function Header() {
           <span>Kastral</span>
         </Link>
 
-        {/* Zone 2: 5 Single-Line Navigation Links */}
+        {/* Zone 2: 6 Single-Line Navigation Links (1:1 con categorías del catálogo) */}
         <nav
           aria-label="Navegación principal"
-          className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          className="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-700 dark:text-zinc-300"
         >
           <Link
-            href="/#catalogo-imagen"
+            href="/?categoria=imagen#explorar-herramientas"
             className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
               pathname?.includes('imagen')
                 ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'
@@ -93,7 +93,7 @@ export function Header() {
             Imágenes
           </Link>
           <Link
-            href="/#catalogo-pdf"
+            href="/?categoria=pdf#explorar-herramientas"
             className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
               pathname?.includes('pdf')
                 ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'
@@ -103,7 +103,7 @@ export function Header() {
             PDF
           </Link>
           <Link
-            href="/#catalogo-documentos"
+            href="/?categoria=documentos#explorar-herramientas"
             className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
               pathname?.includes('documento') || pathname?.includes('hoja-calculo')
                 ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'
@@ -113,17 +113,27 @@ export function Header() {
             Documentos
           </Link>
           <Link
-            href="/#catalogo-multimedia"
+            href="/?categoria=audio#explorar-herramientas"
             className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
-              pathname?.includes('audio') || pathname?.includes('video')
+              pathname?.includes('audio')
                 ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'
                 : ''
             }`}
           >
-            Audio y Vídeo
+            Audio
           </Link>
           <Link
-            href="/#catalogo-archivos"
+            href="/?categoria=video#explorar-herramientas"
+            className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
+              pathname?.includes('video')
+                ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'
+                : ''
+            }`}
+          >
+            Vídeo
+          </Link>
+          <Link
+            href="/?categoria=archivos#explorar-herramientas"
             className={`hover:text-zinc-950 dark:hover:text-white transition-colors whitespace-nowrap shrink-0 py-1 ${
               pathname?.includes('zip')
                 ? 'text-zinc-950 dark:text-white underline underline-offset-8 decoration-[#C86D2D] decoration-2'

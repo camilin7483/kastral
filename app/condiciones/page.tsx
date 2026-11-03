@@ -13,11 +13,11 @@ export default function CondicionesPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10">
       <div className="space-y-3">
-        <p className="text-xs font-mono tabular-nums text-zinc-500">Vigencia: Octubre 2026</p>
+        <p className="text-xs font-mono tabular-nums text-zinc-600 dark:text-zinc-300">Vigencia: Octubre 2026</p>
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
           Condiciones de Uso del Servicio
         </h1>
-        <p className="text-base text-zinc-600 dark:text-zinc-400">
+        <p className="text-base text-zinc-700 dark:text-zinc-300">
           Al utilizar las herramientas de conversión y compresión de Kastral, aceptas las presentes condiciones pensadas para garantizar un servicio gratuito, seguro y estable para todos los usuarios.
         </p>
       </div>
@@ -47,7 +47,7 @@ export default function CondicionesPage() {
         <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
           Para proteger la estabilidad del servidor y permitir que el servicio opere dentro de infraestructuras eficientes:
         </p>
-        <ul className="list-disc pl-5 space-y-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+        <ul className="list-disc pl-5 space-y-1.5 text-sm text-zinc-700 dark:text-zinc-300">
           <li>Existe un límite máximo de tamaño por archivo (entre 25 MB y 100 MB según la herramienta) y un límite de tiempo de ejecución de 60 segundos por tarea en el servidor.</li>
           <li>Kastral no es un servicio de almacenamiento en la nube; descarga siempre tus archivos convertidos inmediatamente, ya que se eliminan de forma automática.</li>
           <li>El servicio se proporciona &ldquo;tal cual&rdquo;, recomendándose conservar siempre una copia de respaldo de tus documentos originales antes de realizar cualquier modificación.</li>

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capability por defecto del spike: sin permisos adicionales.",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["opener:default"]
 }

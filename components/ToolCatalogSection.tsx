@@ -19,9 +19,21 @@ const CATEGORIES: { id: 'all' | ToolCategory; label: string }[] = [
   { id: 'archivos', label: 'Comprimidos' },
 ];
 
-export function ToolCatalogSection() {
+export function ToolCatalogSection({
+  initialCategory = 'all',
+}: {
+  initialCategory?: 'all' | ToolCategory;
+}) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | ToolCategory>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | ToolCategory>(initialCategory);
+
+  // Sincroniza el filtro cuando la navegación trae ?categoria= (p. ej. desde el Header).
+  // Ajuste durante el render (patrón React recomendado): evita setState en efecto.
+  const [prevInitialCategory, setPrevInitialCategory] = useState(initialCategory);
+  if (prevInitialCategory !== initialCategory) {
+    setPrevInitialCategory(initialCategory);
+    setSelectedCategory(initialCategory);
+  }
 
   const filteredTools = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -53,14 +65,14 @@ export function ToolCatalogSection() {
 
         {/* Buscador en tiempo real */}
         <div className="relative w-full md:w-80 shrink-0">
-          <Search className="w-4 h-4 text-zinc-500 dark:text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-zinc-600 dark:text-zinc-300 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar formato (ej. webp, pdf, mp3, zip)..."
             aria-label="Buscar herramienta por nombre o formato"
-            className="w-full pl-9 pr-4 py-2.5 text-sm bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] rounded-xl text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[#C86D2D]"
+            className="w-full pl-9 pr-4 py-2.5 text-sm bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] rounded-xl text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 dark:placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-[#C86D2D]"
           />
         </div>
       </div>
@@ -92,19 +104,12 @@ export function ToolCatalogSection() {
         })}
       </div>
 
-      {/* Anclas de categoría para navegación directa */}
-      <div id="catalogo-imagen" className="sr-only" />
-      <div id="catalogo-pdf" className="sr-only" />
-      <div id="catalogo-documentos" className="sr-only" />
-      <div id="catalogo-multimedia" className="sr-only" />
-      <div id="catalogo-archivos" className="sr-only" />
-
       {filteredTools.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] rounded-2xl space-y-3">
           <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">
             No encontramos herramientas que coincidan con &ldquo;{searchQuery}&rdquo;
           </p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
             Prueba buscando una extensión como PDF, WebP, DOCX, CSV, MP3, MP4 o ZIP.
           </p>
           <button
@@ -127,15 +132,15 @@ export function ToolCatalogSection() {
               className="group p-5 bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] hover:border-[#C86D2D] dark:hover:border-[#DF7B35] rounded-2xl transition-colors flex flex-col justify-between gap-4"
             >
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+                <div className="flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300">
                   <span>
                     <strong className="text-[#C86D2D] dark:text-[#DF7B35]">{tool.categoryLabel}</strong> · {tool.engineBadge}
                   </span>
-                  <ArrowUpRight className="w-4 h-4 text-zinc-400 group-hover:text-[#C86D2D] dark:group-hover:text-[#DF7B35] transition-colors shrink-0" />
+                  <ArrowUpRight className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-[#C86D2D] dark:group-hover:text-[#DF7B35] transition-colors shrink-0" />
                 </div>
 
                 <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-[#C86D2D] dark:group-hover:text-[#DF7B35] transition-colors">
-                  {tool.shortTitle}
+                  {tool.title}
                 </h3>
 
                 <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
@@ -143,7 +148,7 @@ export function ToolCatalogSection() {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-[#EAE4DC] dark:border-[#222228] flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 font-mono tabular-nums">
+              <div className="pt-3 border-t border-[#EAE4DC] dark:border-[#222228] flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300 font-mono tabular-nums">
                 <span className="truncate max-w-[70%]">
                   Entrada: {tool.acceptedExtensions.slice(0, 4).join(', ')}
                 </span>

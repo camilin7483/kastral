@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, AlertCircle, Copy, Mail } from 'lucide-react';
 import { CustomSelect } from '@/components/CustomSelect';
+import { isTauri } from '@/lib/tauri-engine';
 
 // Contact address can be overridden at build time via NEXT_PUBLIC_CONTACT_EMAIL.
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'cuentacamilo48@gmail.com';
@@ -23,13 +24,42 @@ export default function ContactoPage() {
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const buildMailto = () => {
+  const buildMessageText = () => {
     const topicLabel = TOPIC_OPTIONS.find((option) => option.value === topic)?.label || 'Consulta';
-    const body = `Nombre: ${name.trim()}\nCorreo: ${email.trim()}\nMotivo: ${topicLabel}\n\n${message.trim()}`;
-    return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`[Kastral] ${topicLabel}`)}&body=${encodeURIComponent(body)}`;
+    return `Nombre: ${name.trim()}\nCorreo: ${email.trim()}\nMotivo: ${topicLabel}\n\n${message.trim()}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const buildMailto = () => {
+    const topicLabel = TOPIC_OPTIONS.find((option) => option.value === topic)?.label || 'Consulta';
+    return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`[Kastral] ${topicLabel}`)}&body=${encodeURIComponent(buildMessageText())}`;
+  };
+
+  // En desktop (Tauri) `window.location.href = mailto:` abre una pestaña vacía
+  // en vez del cliente de correo: se usa openUrl del plugin-opener.
+  const openInMailClient = async (mailto: string): Promise<boolean> => {
+    if (!isTauri()) {
+      window.location.href = mailto;
+      return true;
+    }
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(mailto);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(buildMessageText());
+      setCopied(true);
+    } catch {
+      setError('No se pudo copiar automáticamente. Selecciona el texto del mensaje a mano.');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -47,20 +77,16 @@ export default function ContactoPage() {
     }
 
     setCopied(false);
-    setSubmitted(true);
-    window.location.href = buildMailto();
-  };
-
-  const copyMessage = async () => {
-    const topicLabel = TOPIC_OPTIONS.find((option) => option.value === topic)?.label || 'Consulta';
-    try {
-      await navigator.clipboard.writeText(
-        `Nombre: ${name.trim()}\nCorreo: ${email.trim()}\nMotivo: ${topicLabel}\n\n${message.trim()}`
-      );
-      setCopied(true);
-    } catch {
-      setError('No se pudo copiar automáticamente. Selecciona el texto del mensaje a mano.');
+    if (isTauri()) {
+      const opened = await openInMailClient(buildMailto());
+      if (!opened) {
+        // Fallback: deja el mensaje listo en el portapapeles para enviarlo a mano.
+        await copyMessage();
+      }
+    } else {
+      window.location.href = buildMailto();
     }
+    setSubmitted(true);
   };
 
   return (
@@ -70,7 +96,7 @@ export default function ContactoPage() {
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
           Contacto con el equipo de Kastral
         </h1>
-        <p className="text-base text-zinc-600 dark:text-zinc-400">
+        <p className="text-base text-zinc-700 dark:text-zinc-300">
           ¿Encontraste un archivo que no pudo convertirse correctamente o quieres proponer un nuevo formato para el catálogo? Rellena el formulario y se abrirá tu programa de correo con el mensaje listo para enviar a <strong>{CONTACT_EMAIL}</strong>.
         </p>
       </div>
@@ -81,10 +107,10 @@ export default function ContactoPage() {
             <CheckCircle2 className="w-5 h-5" />
             <span>Mensaje preparado en tu programa de correo</span>
           </div>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
             Se ha abierto tu cliente de correo con el mensaje dirigido a <strong>{CONTACT_EMAIL}</strong>. Envíalo desde ahí para que nos llegue; el formulario no transmite nada por sí solo.
           </p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
             Si no se abrió nada, copia el mensaje y envíalo a mano a esa misma dirección.
           </p>
           {error && (
@@ -93,6 +119,15 @@ export default function ContactoPage() {
           <div className="flex flex-wrap gap-2">
             <a
               href={buildMailto()}
+              onClick={async (e) => {
+                if (isTauri()) {
+                  e.preventDefault();
+                  const opened = await openInMailClient(buildMailto());
+                  if (!opened) {
+                    setError('No se pudo abrir el cliente de correo. Usa «Copiar mensaje» y envíalo a mano.');
+                  }
+                }
+              }}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#C86D2D] hover:bg-[#B05B1E] rounded-lg transition-colors"
             >
               <Mail className="w-3.5 h-3.5" />

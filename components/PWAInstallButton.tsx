@@ -46,7 +46,7 @@ export function PWAInstallButton() {
                 >
                   Usar Kastral 100 % Local y Sin Internet
                 </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs text-zinc-600 dark:text-zinc-300">
                   Todas las herramientas ya están configuradas para ejecutarse en la memoria de tu navegador.
                 </p>
               </div>
@@ -54,7 +54,7 @@ export function PWAInstallButton() {
                 type="button"
                 onClick={() => setShowModal(false)}
                 aria-label="Cerrar guía de instalación local"
-                className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
+                className="p-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -25,7 +25,7 @@ export function Footer() {
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Convierte. Comprime. Simplifica.
             </p>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-sm">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-sm">
               Plataforma gratuita de conversión, compresión y optimización de archivos. La mayoría de las herramientas se ejecutan en tu navegador; las que necesitan Ghostscript o FFmpeg usan un directorio temporal en el servidor.
             </p>
           </div>
@@ -35,7 +35,7 @@ export function Footer() {
             <h2 className="text-xs font-bold tracking-wider text-zinc-900 dark:text-zinc-100">
               Herramientas Destacadas
             </h2>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-700 dark:text-zinc-300">
               {popularTools.map((tool) => (
                 <li key={tool.slug}>
                   <Link
@@ -54,7 +54,7 @@ export function Footer() {
             <h2 className="text-xs font-bold tracking-wider text-zinc-900 dark:text-zinc-100">
               Arquitectura, Seguridad y Legal
             </h2>
-            <ul className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <ul className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
               <li>
                 <Link href="/como-funciona" className="hover:text-[#C86D2D] dark:hover:text-[#DF7B35] transition-colors">
                   Cómo funciona y seguridad de archivos
@@ -62,7 +62,7 @@ export function Footer() {
               </li>
               <li>
                 <Link href="/privacidad" className="hover:text-[#C86D2D] dark:hover:text-[#DF7B35] transition-colors">
-                  Política de privacidad y cookies (AdSense)
+                  Política de privacidad y cookies
                 </Link>
               </li>
               <li>
@@ -79,7 +79,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-10 pt-8 border-t border-[#DCD5CB] dark:border-[#222228] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mt-10 pt-8 border-t border-[#DCD5CB] dark:border-[#222228] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-600 dark:text-zinc-300">
           <p>
             © 2026 Kastral · Por <span className="font-semibold text-zinc-800 dark:text-zinc-200">Andres Guerrero</span>. Herramientas gratuitas de archivos sin registro.
           </p>

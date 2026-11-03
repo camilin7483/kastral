@@ -74,6 +74,10 @@ export default async function ToolDetailPage({
     })),
   };
 
+  const outputLabel = tool.outputFormats
+    .map((f) => (f === 'keep' ? 'mismo formato' : f === 'extract' ? 'archivos sueltos' : f.toUpperCase()))
+    .join(' · ');
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 space-y-14">
       <script
@@ -83,7 +87,7 @@ export default async function ToolDetailPage({
 
       {/* Breadcrumb y Cabecera de la Herramienta */}
       <div className="space-y-4 max-w-3xl">
-        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
           <Link
             href="/"
             className="inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
@@ -97,11 +101,15 @@ export default async function ToolDetailPage({
           <span className="text-zinc-900 dark:text-zinc-200 font-medium">{tool.shortTitle}</span>
         </div>
 
+        <p className="text-xs font-bold uppercase tracking-wider text-[#C86D2D] dark:text-[#DF7B35]">
+          {tool.categoryLabel} · Salida: {outputLabel}
+        </p>
+
         <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 [text-wrap:balance]">
           {tool.title}
         </h1>
 
-        <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 leading-relaxed">
+        <p className="text-sm sm:text-base text-zinc-700 dark:text-zinc-300 leading-relaxed">
           {tool.description}
         </p>
       </div>
@@ -136,7 +144,7 @@ export default async function ToolDetailPage({
               <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                 Consideraciones técnicas y límites reales
               </h3>
-              <ul className="space-y-2 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 list-disc pl-5">
+              <ul className="space-y-2 text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 list-disc pl-5">
                 {tool.limitations.map((lim, idx) => (
                   <li key={idx}>{lim}</li>
                 ))}
@@ -152,33 +160,33 @@ export default async function ToolDetailPage({
           </h2>
           <dl className="divide-y divide-[#E4DEC6] dark:divide-[#27272D] text-xs sm:text-sm">
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Categoría</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Categoría</dt>
               <dd className="font-medium text-zinc-900 dark:text-zinc-100">{tool.categoryLabel}</dd>
             </div>
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Motor de ejecución</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Motor de ejecución</dt>
               <dd className="font-medium text-emerald-700 dark:text-emerald-400 text-right">{tool.engineBadge}</dd>
             </div>
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Formatos admitidos</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Formatos admitidos</dt>
               <dd className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100 text-right">
                 {tool.acceptedExtensions.join(', ')}
               </dd>
             </div>
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Formatos de salida</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Formatos de salida</dt>
               <dd className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100 text-right">
                 {tool.outputFormats.map((f) => f.toUpperCase()).join(', ')}
               </dd>
             </div>
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Tamaño máximo por archivo</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Tamaño máximo por archivo</dt>
               <dd className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
                 {tool.maxFileSizeMB} MB
               </dd>
             </div>
             <div className="py-2.5 flex justify-between gap-4">
-              <dt className="text-zinc-500 dark:text-zinc-400">Archivos por lote</dt>
+              <dt className="text-zinc-600 dark:text-zinc-300">Archivos por lote</dt>
               <dd className="font-mono tabular-nums text-zinc-900 dark:text-zinc-100">
                 Hasta {tool.maxBatchFiles}
               </dd>
@@ -202,7 +210,7 @@ export default async function ToolDetailPage({
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   {faq.question}
                 </h3>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
                   {faq.answer}
                 </p>
               </div>
@@ -224,14 +232,14 @@ export default async function ToolDetailPage({
                 href={`/herramientas/${rel.slug}`}
                 className="group p-4 bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] hover:border-[#C86D2D] rounded-xl transition-colors flex flex-col justify-between gap-2"
               >
-                <div className="flex items-center justify-between text-xs text-zinc-500">
+                <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-300">
                   <span>{rel.categoryLabel}</span>
                   <ArrowUpRight className="w-3.5 h-3.5 group-hover:text-[#C86D2D]" />
                 </div>
                 <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-[#C86D2D]">
                   {rel.shortTitle}
                 </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2">
+                <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-2">
                   {rel.description}
                 </p>
               </Link>

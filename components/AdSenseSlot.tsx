@@ -45,7 +45,7 @@ export function AdSenseSlot({ slotId, format = 'auto', className = '' }: AdSense
       aria-label="Espacio publicitario"
       className={`my-10 max-w-4xl mx-auto px-4 py-3 border border-zinc-200/80 dark:border-zinc-800/80 rounded-lg bg-zinc-50/60 dark:bg-zinc-900/40 ${className}`}
     >
-      <div className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-1.5 text-center select-none">
+      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-1.5 text-center select-none">
         Publicidad
       </div>
       <ins

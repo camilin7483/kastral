@@ -27,6 +27,9 @@ export default function HomePage() {
           <p className="text-base sm:text-lg text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-2xl">
             Transforma y optimiza imágenes, documentos PDF, hojas de cálculo, audio, vídeo y archivos ZIP sin instalar programas ni crear cuentas.
           </p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl">
+            A diferencia de ILovePDF o SmallPDF: tus archivos se procesan en tu propio dispositivo siempre que es posible, sin cuentas ni telemetría, y cada límite está documentado — nada de muros de pago a mitad de tarea.
+          </p>
         </div>
 
         {/* Mesa de trabajo interactiva en primera pantalla */}

@@ -284,7 +284,14 @@ async function executeServerTool(
 
   // 1. IMÁGENES EN SERVIDOR (Sharp: AVIF, WebP, PNG, JPEG, Redimensionado)
   if (['convertir-imagen', 'comprimir-imagen', 'redimensionar-imagen'].includes(slug)) {
+    const allowedImageFormats = ['png', 'jpg', 'jpeg', 'webp', 'avif'];
     const origExt = task.originalName.split('.').pop()?.toLowerCase() || 'webp';
+    const requested = targetFormat.toLowerCase();
+    // Sin allowlist, un formato inventado acuñaba `nombre.exe` con MIME falso
+    // (phishing con adjuntos firmados por el propio dominio).
+    if (requested !== 'keep' && !allowedImageFormats.includes(requested)) {
+      throw new Error(`Formato de salida no soportado: "${targetFormat}". Usa: WEBP, JPG, PNG o AVIF.`);
+    }
     const resolvedFmt =
       targetFormat === 'keep'
         ? origExt === 'jpeg'
@@ -292,7 +299,7 @@ async function executeServerTool(
           : ['png', 'jpg', 'webp', 'avif'].includes(origExt)
             ? origExt
             : 'webp'
-        : targetFormat.toLowerCase();
+        : requested;
 
     const quality = Math.min(100, Math.max(10, Number(params.quality ?? 80)));
     let pipeline = sharp(inputPath, { failOn: 'none' }).rotate();

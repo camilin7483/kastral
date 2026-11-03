@@ -308,12 +308,36 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
   };
 
   /**
+   * Progreso vivo para tareas largas (servidor o Tauri): la petición es
+   * atómica, así que la barra avanzaría a saltos (15 % → espera → 100 %).
+   * En su lugar se anima con easing hacia un tope honesto (<100 %) mientras
+   * se muestra la etapa real. Nunca finge finalización: el 100 % solo llega
+   * con el resultado en mano.
+   */
+  const trackLongTask = (id: string, stage: string, cap = 90) => {
+    updateItemState(id, { progress: 8, details: stage });
+    const timer = setInterval(() => {
+      setItems((prev) =>
+        prev.map((it) => {
+          if (it.id !== id || it.status !== 'processing') return it;
+          const next = it.progress + Math.max(0.4, (cap - it.progress) * 0.05);
+          return { ...it, progress: Math.min(cap, next) };
+        })
+      );
+    }, 500);
+    return () => clearInterval(timer);
+  };
+
+  /**
    * Envía el archivo a la ruta integrada /api/v1/process (Sharp, Ghostscript o FFmpeg)
    * y devuelve el resultado ya descargado como Blob.
    */
   const processOnServer = async (item: WorkbenchItem, slug: string, fmt: string) => {
     const onPct = (pct: number) => updateItemState(item.id, { progress: pct });
-    onPct(15);
+    const stopTracking = trackLongTask(
+      item.id,
+      `Subiendo ${formatBytes(item.file.size)} al motor del servidor…`
+    );
 
     const form = new FormData();
     form.append('file', item.file);
@@ -333,16 +357,22 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     };
 
     if (!response.ok || data.status === 'failed' || !data.downloadUrl) {
+      stopTracking();
       throw new Error(data.error || 'El servidor no pudo procesar el archivo.');
     }
 
-    onPct(80);
+    updateItemState(item.id, {
+      progress: 92,
+      details: 'Procesando en el servidor… los vídeos y AVIF pueden tardar unos minutos.',
+    });
     const download = await fetch(data.downloadUrl);
     if (!download.ok) {
+      stopTracking();
       throw new Error('El archivo se procesó pero no se pudo descargar el resultado.');
     }
 
     const blob = await download.blob();
+    stopTracking();
     onPct(100);
     return {
       outputBlob: blob,
@@ -359,17 +389,25 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
    * y devuelve el resultado con el mismo shape que processOnServer.
    */
   const processTauriItem = async (item: WorkbenchItem, slug: string, fmt: string) => {
-    updateItemState(item.id, { progress: 15 });
-    const res = await processOnTauri(item.file, slug, fmt, params);
-    updateItemState(item.id, { progress: 100 });
-    return {
-      outputBlob: res.outputBlob,
-      outputFilename: res.outputFilename,
-      outputSize: res.outputSize,
-      mimeType: res.mimeType,
-      details: res.details,
-      extractedItems: undefined,
-    };
+    const stopTracking = trackLongTask(
+      item.id,
+      'Procesando en el motor local… los vídeos y AVIF pueden tardar unos minutos.'
+    );
+    try {
+      const res = await processOnTauri(item.file, slug, fmt, params);
+      stopTracking();
+      updateItemState(item.id, { progress: 100 });
+      return {
+        outputBlob: res.outputBlob,
+        outputFilename: res.outputFilename,
+        outputSize: res.outputSize,
+        mimeType: res.mimeType,
+        details: res.details,
+        extractedItems: undefined,
+      };
+    } finally {
+      stopTracking();
+    }
   };
 
   /**

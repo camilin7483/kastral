@@ -2,6 +2,8 @@
 
 Plataforma gratuita de conversión, compresión y optimización de archivos: **17 herramientas** que procesan imágenes, PDF, documentos, hojas de cálculo, audio, vídeo y ZIP. Arquitectura honesta *navegador primero, servidor solo cuando hace falta*, con app de escritorio **Tauri 2** para Linux y Windows.
 
+> **Por qué Kastral en vez de ILovePDF / SmallPDF / Convertio:** tus archivos se procesan en tu propio dispositivo siempre que es técnicamente posible (privacidad real, no promesas), la app de escritorio funciona sin cuentas ni telemetría, y cada límite (tamaños, tiempos, formatos) está documentado abajo en vez de descubrirlo con un error de pago.
+
 ## Cómo funciona
 
 | Dónde se procesa | Herramientas |
@@ -79,12 +81,30 @@ Notas:
 git tag v0.1.1 && git push origin v0.1.1   # dispara el release
 ```
 
-## Límites honestos
+## ⚠️ Límites honestos (léeme antes de procesar)
 
-- AVIF de 19 MP tarda ~2 min (codificador lento, pero completa); vídeos de 38 MB se comprimen en segundos.
-- DOCX→PDF reconstruye texto/encabezados, no diseños complejos ni macros; DOC binario antiguo necesita LibreOffice.
+| Herramienta | Límite real verificado |
+|---|---|
+| Imágenes (subida) | 35 MB por archivo; redimensionar rechaza lados > 8000 px |
+| PDF | 50 MB; Ghostscript ebook tarda ~2 s en 20 MB |
+| PDF a imágenes | 40 MB; DPI 96/150/300 |
+| Audio / Vídeo | 50 MB por archivo; timeout 60 s por tarea |
+| AVIF (19 MP) | ~2 min de codificación (lento, pero completa) |
+| Vídeo 38 MB→MP4 | ~6 s; se conserva la pista de audio |
+| Documentos | 25 MB; DOCX→PDF reconstruye texto/encabezados, no diseños complejos, macros ni fuentes incrustadas; DOC binario antiguo necesita LibreOffice |
+| ZIP | 100 MB; sin cifrado ni multivolumen; se bloquea Zip Slip |
+
 - Ghostscript es AGPL: se invoca como binario separado, no se enlaza. En desktop Linux se espera del sistema; el instalador Windows lo incluye descargado de la fuente oficial en CI.
+- Concurrencia del servidor: 2 tareas simultáneas; el resto espera en cola FIFO.
 
-## Licencia y contacto
+## Despliegue web (standalone)
 
-© 2026 Kastral · Por Andres Guerrero. Soporte: formulario de `/contacto` (abre tu correo a la dirección configurada).
+```bash
+bun run build && bun run start   # http://localhost:3000, sin telemetría
+```
+
+`output: 'standalone'` genera un servidor Node autocontenido (`.next/standalone/server.js`). Variables críticas en producción: `NEXT_PUBLIC_SITE_URL` (canónica), `MAX_FILE_SIZE_MB`, `MAX_CONCURRENT_TASKS=2`, `TASK_TIMEOUT_SECONDS=60`, `TEMP_CLEANUP_MINUTES=15` (purga de temporales). El backend FastAPI (`backend/`) solo tiene sentido si sirves la web a terceros desde un servidor dedicado: replica los mismos motores con `ALLOWED_ORIGINS` restringido a tu dominio y mismos límites.
+
+## Licencia (MIT)
+
+Kastral se distribuye bajo licencia MIT — ver [LICENSE](./LICENSE). © 2026 Andres Guerrero. Soporte: formulario de `/contacto` (abre tu correo a la dirección configurada).

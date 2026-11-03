@@ -13,7 +13,7 @@ export function Footer() {
           <div className="md:col-span-4 space-y-4">
             <Link href="/" className="flex items-center gap-3 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               <img
-                src="/assets/aistudio/image_a3e77aab.png"
+                src="/assets/brand/image_a3e77aab.png"
                 alt="Icono de Kastral con inicial K"
                 width={36}
                 height={36}

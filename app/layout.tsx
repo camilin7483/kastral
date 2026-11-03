@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     locale: 'es_ES',
     images: [
       {
-        url: '/assets/aistudio/image_8099a79d.png',
+        url: '/assets/brand/image_8099a79d.png',
         width: 512,
         height: 512,
         alt: 'Logo oficial de Kastral',
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     title: 'Kastral — Convierte, Comprime y Simplifica Archivos Gratis',
     description:
       'Convierte y comprime imágenes, PDF, documentos, audio, vídeo y archivos ZIP directamente desde tu navegador sin registro.',
-    images: ['/assets/aistudio/image_8099a79d.png'],
+    images: ['/assets/brand/image_8099a79d.png'],
   },
 };
 

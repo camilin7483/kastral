@@ -33,6 +33,7 @@ jobs:
         run: python -m pip install -r backend/requirements.txt
       - run: bunx tsc --noEmit
       - run: bunx eslint . --max-warnings 100
+      - run: bun run check:branding
       - run: bun test lib/
       - run: python -m pytest backend -q
       - run: bun run build

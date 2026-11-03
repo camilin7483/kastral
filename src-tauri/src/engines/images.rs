@@ -224,20 +224,28 @@ mod tests {
         std::fs::write(
             &input,
             &[
-                0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I',
-                b'H', b'D', b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90,
-                0x77, 0x53, 0xDE, 0, 0, 0, 12, b'I', b'D', b'A', b'T', 0x08,
-                0xD7, 0x63, 0xF8, 0x0F, 0x00, 0x00, 0x01, 0x00, 0x01, 0x9D,
-                0x34, 0x4E, 0x1D, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xAE,
-                0x42, 0x60, 0x82,
+                0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D',
+                b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xDE, 0, 0, 0, 12,
+                b'I', b'D', b'A', b'T', 0x08, 0xD7, 0x63, 0xF8, 0x0F, 0x00, 0x00, 0x01, 0x00, 0x01,
+                0x9D, 0x34, 0x4E, 0x1D, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xAE, 0x42, 0x60, 0x82,
             ],
         )
         .unwrap();
         let mut params = serde_json::Map::new();
         params.insert("width".into(), serde_json::json!(99999999));
-        let err = process("convertir", &input, "mini.png", "jpg", &serde_json::Value::Object(params), &dir)
-            .unwrap_err();
-        assert!(err.contains("8000 px"), "mensaje en español esperado, fue: {err}");
+        let err = process(
+            "convertir",
+            &input,
+            "mini.png",
+            "jpg",
+            &serde_json::Value::Object(params),
+            &dir,
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("8000 px"),
+            "mensaje en español esperado, fue: {err}"
+        );
         let _ = std::fs::remove_file(&input);
     }
 

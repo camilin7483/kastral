@@ -67,7 +67,7 @@ export function Header() {
           className="flex items-center gap-3 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C86D2D] rounded-lg"
         >
           <img
-            src="/assets/aistudio/image_8099a79d.png"
+            src="/assets/brand/image_8099a79d.png"
             alt="Logo de Kastral"
             width={34}
             height={34}

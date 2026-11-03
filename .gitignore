@@ -21,7 +21,6 @@ __pycache__/
 *.pyc
 .aistudio/
 tsconfig.tsbuildinfo
-public/assets/aistudio/
 
 # Notas internas de trabajo (no se publican)
 .instrucciones/

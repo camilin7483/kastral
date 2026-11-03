@@ -1,4 +1,8 @@
-const CACHE_NAME = 'kastral-offline-v3';
+// CAMBIAR EN CADA RELEASE: si el contenido estático cambia y el nombre del caché
+// no cambia, los navegadores conservan el Service Worker viejo y la app nunca
+// se actualiza en los equipos instalados. Mantener sincronizado con package.json.
+const APP_VERSION = '0.1.5';
+const CACHE_NAME = `kastral-offline-${APP_VERSION}`;
 
 const CORE_ROUTES = [
   '/',

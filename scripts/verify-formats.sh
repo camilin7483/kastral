@@ -168,6 +168,8 @@ for spec in "${CASES[@]}"; do
   else fail=$((fail+1)); failed_cases+=("$spec"); echo "FAIL $spec -> $reason"
     head -c 300 "$resp" 2>/dev/null | tr -d '\n'; echo
   fi
+  # Pausa para no chocar con el rate-limit del servidor (30 req/min).
+  sleep 2.5
 done
 
 echo "----"

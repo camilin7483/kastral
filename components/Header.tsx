@@ -156,6 +156,12 @@ export function Header() {
           </button>
 
           <Link
+            href="/por-que-kastral"
+            className="px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-[#C86D2D] dark:hover:text-[#DF7B35] transition-colors whitespace-nowrap shrink-0"
+          >
+            Por qué Kastral
+          </Link>
+          <Link
             href="/#explorar-herramientas"
             className="px-4 py-2 text-xs font-semibold text-white bg-[#C86D2D] hover:bg-[#AD581D] rounded-xl transition-colors whitespace-nowrap shrink-0 shadow-xs"
           >

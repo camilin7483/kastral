@@ -6,7 +6,8 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::{
-    build_output_filename, find_bin, run_bin, str_param, user_error_from_stderr, EngineOutput,
+    build_output_filename, find_bin, run_bin, str_param, unsupported_codec_error,
+    user_error_from_stderr, EngineOutput,
 };
 
 fn spec(fmt: &str) -> Option<(&'static [&'static str], &'static str)> {
@@ -69,6 +70,9 @@ pub fn process(
         return Err(String::from(
             "El archivo no contiene una pista de audio que se pueda extraer.",
         ));
+    }
+    if let Some(msg) = unsupported_codec_error(&stderr) {
+        return Err(msg);
     }
     Err(user_error_from_stderr(
         &stderr,

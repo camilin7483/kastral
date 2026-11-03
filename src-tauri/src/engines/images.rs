@@ -135,8 +135,11 @@ pub fn process(
             args.push(quality.to_string());
         }
         "avif" => {
+            // AVIF se codifica con el encoder AV1 disponible (libaom-av1,
+            // presente en el sidecar y en FFmpeg de escritorio); el muxer
+            // avif se elige por la extensión .avif de salida.
             args.push("-c:v".into());
-            args.push("libaom-avif".into());
+            args.push("libaom-av1".into());
             args.push("-crf".into());
             // Map quality 10-100 to CRF 32-8.
             args.push((32 - (quality * 24 / 100)).to_string());
@@ -150,9 +153,9 @@ pub fn process(
         Err(e) => e,
     };
     if !out_path.is_file() {
-        if stderr.contains("Unknown encoder") && stderr.contains("avif") {
+        if stderr.contains("Unknown encoder") {
             return Err(String::from(
-                "Esta instalación de FFmpeg no incluye el codificador AVIF (libaom-avif). Elige WebP o PNG.",
+                "Esta compilación de FFmpeg no trae codificador AVIF. Elige WebP o PNG.",
             ));
         }
         if !stderr.is_empty() {
@@ -244,6 +247,45 @@ mod tests {
         .unwrap();
         assert_eq!(out.mime, "image/jpeg");
         assert!(out.path.is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn converts_generated_png_to_avif() {
+        let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
+        let dir = std::env::temp_dir().join("kastral-img-avif-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = dir.join("in.png");
+        let status = Command::new(&ffmpeg)
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=32x32:duration=1:rate=1",
+                "-frames:v",
+                "1",
+            ])
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        let out = process(
+            "convert",
+            &input,
+            "in.png",
+            "avif",
+            &serde_json::json!({"quality": 70}),
+            &dir,
+        )
+        .unwrap();
+        assert_eq!(out.mime, "image/avif");
+        assert!(out.path.is_file());
+        // AVIF real: caja ftyp en los primeros bytes.
+        let bytes = std::fs::read(&out.path).unwrap();
+        assert!(bytes.len() > 12);
+        assert_eq!(&bytes[4..8], b"ftyp");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

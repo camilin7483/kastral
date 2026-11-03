@@ -612,6 +612,12 @@ mod tests {
     }
 
     fn write_min_docx(path: &Path, body_xml: &str) {
+        write_docx_with_extra(path, body_xml, &[]);
+    }
+
+    /// Como `write_min_docx` más entradas adicionales arbitrarias (p. ej.
+    /// `.bat` en subcarpetas o nombres con `\`): no deben invalidar el DOCX.
+    fn write_docx_with_extra(path: &Path, body_xml: &str, extras: &[(&str, &[u8])]) {
         let file = File::create(path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
         zip.start_file(
@@ -626,6 +632,11 @@ mod tests {
             .as_bytes(),
         )
         .unwrap();
+        for (name, data) in extras {
+            zip.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(data).unwrap();
+        }
         zip.finish().unwrap();
     }
 
@@ -716,6 +727,30 @@ mod tests {
         let bytes = std::fs::read(&out.path).unwrap();
         assert!(bytes.starts_with(b"%PDF"), "el PDF debe empezar por %PDF");
         assert_eq!(out.mime, "application/pdf");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn docx_with_bat_and_backslash_entries_is_not_damaged() {
+        // ZIP con .bat en subcarpetas y separadores `\`: el documento debe
+        // leerse igual (solo se lee word/document.xml en memoria, nunca se
+        // extrae a disco, así que no hay riesgo de traversal).
+        let dir = workdir("docx-zip");
+        let input = dir.join("doc.docx");
+        write_docx_with_extra(
+            &input,
+            "<w:p><w:r><w:t>Hola mundo</w:t></w:r></w:p>",
+            &[
+                (
+                    "scripts\\herramienta.bat",
+                    b"@echo off\r\necho hola\r\n".as_slice(),
+                ),
+                ("subcarpeta/nota.bat", b"@echo off\r\n".as_slice()),
+            ],
+        );
+        let out = process(&input, "doc.docx", "txt", &dir).unwrap();
+        let text = std::fs::read_to_string(&out.path).unwrap();
+        assert!(text.contains("Hola mundo"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

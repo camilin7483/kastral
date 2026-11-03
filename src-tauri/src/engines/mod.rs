@@ -269,6 +269,29 @@ pub fn user_error_from_stderr(stderr: &str, fallback: &str) -> String {
     msg
 }
 
+/// Honest error when FFmpeg cannot decode the input codec or container.
+/// Returns `Some` user-facing Spanish message when `stderr` signals an
+/// unsupported codec; `None` otherwise.
+pub fn unsupported_codec_error(stderr: &str) -> Option<String> {
+    let lower = stderr.to_lowercase();
+    let hits = [
+        "unknown decoder",
+        "decoder not found",
+        "could not find codec",
+        "unsupported codec",
+        "invalid data found when processing input",
+    ];
+    if hits.iter().any(|h| lower.contains(h))
+        || (lower.contains("decoder") && lower.contains("not found"))
+    {
+        Some(String::from(
+            "El códec del archivo no es compatible con esta instalación de FFmpeg.",
+        ))
+    } else {
+        None
+    }
+}
+
 pub fn str_param(params: &Value, key: &str) -> Option<String> {
     params.get(key).and_then(|v| {
         v.as_str()
@@ -344,6 +367,22 @@ mod tests {
         let big = vec![0x25u8; MAX_INPUT_BYTES + 1];
         let err = validate_input(&big, "doc.pdf").unwrap_err();
         assert!(err.contains("50 MB"));
+    }
+
+    #[test]
+    fn accepts_avi_mov_mkv_inputs() {
+        // RIFF....AVI (12 bytes mínimos)
+        let avi = [
+            0x52, 0x49, 0x46, 0x46, 0x10, 0x27, 0x00, 0x00, 0x41, 0x56, 0x49, 0x20,
+        ];
+        assert!(validate_input(&avi, "clip.avi").is_ok());
+        // ftyp (MOV)
+        let mov = *b"....ftypqt  ";
+        assert_eq!(mov.len(), 12);
+        assert!(validate_input(&mov, "clip.mov").is_ok());
+        // EBML (MKV/WebM)
+        let mkv = [0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert!(validate_input(&mkv, "clip.mkv").is_ok());
     }
 
     #[test]

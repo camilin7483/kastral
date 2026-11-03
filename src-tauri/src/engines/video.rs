@@ -6,7 +6,8 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::{
-    build_output_filename, find_bin, run_bin, str_param, user_error_from_stderr, EngineOutput,
+    build_output_filename, find_bin, run_bin, str_param, unsupported_codec_error,
+    user_error_from_stderr, EngineOutput,
 };
 
 pub(crate) fn resolve(fmt_in: &str) -> &'static str {
@@ -115,6 +116,9 @@ pub fn process(
     );
 
     if let Err(stderr) = run_bin(&ffmpeg, &args, workdir) {
+        if let Some(msg) = unsupported_codec_error(&stderr) {
+            return Err(msg);
+        }
         return Err(user_error_from_stderr(
             &stderr,
             "FFmpeg no pudo procesar el vídeo. Verifica que el archivo sea válido.",
@@ -204,5 +208,50 @@ mod tests {
         assert_eq!(out.mime, "video/mp4");
         assert!(out.filename.contains("comprimido"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn converts_generated_avi_to_mp4() {
+        let ffmpeg = find_bin("ffmpeg").expect("FFmpeg necesario para este test");
+        let dir = std::env::temp_dir().join("kastral-vid-avi-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = dir.join("in.avi");
+        let status = Command::new(&ffmpeg)
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=64x64:duration=1:rate=5",
+                "-c:v",
+                "mpeg4",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        let out = process(
+            "convert",
+            &input,
+            "in.avi",
+            "mp4",
+            &serde_json::json!({"crf": "28"}),
+            &dir,
+        )
+        .unwrap();
+        assert_eq!(out.mime, "video/mp4");
+        assert!(out.path.is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unsupported_codec_message_is_honest_spanish() {
+        let err = unsupported_codec_error("Decoder (codec h264) not found")
+            .expect("debe detectar códec ausente");
+        assert!(err.contains("códec"));
+        assert!(unsupported_codec_error("todo bien").is_none());
     }
 }

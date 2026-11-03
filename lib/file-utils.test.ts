@@ -98,6 +98,55 @@ test('verifyMagicBytes valida cabecera RIFF/AVI y rechaza impostores', () => {
   assert.equal(verifyMagicBytes(tiny, 'avi').valid, false);
 });
 
+test('verifyMagicBytes cubre los formatos nuevos y rechaza con mensajes en español', () => {
+  const ftyp = new Uint8Array([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32]);
+  assert.equal(verifyMagicBytes(ftyp, 'mov').valid, true);
+  assert.equal(verifyMagicBytes(ftyp, 'm4v').valid, true);
+  assert.equal(verifyMagicBytes(ftyp, '3gp').valid, true);
+  assert.equal(verifyMagicBytes(ftyp, 'm4a').valid, true);
+  assert.equal(verifyMagicBytes(ftyp, 'mp4').valid, true);
+
+  const flv = new Uint8Array([0x46, 0x4c, 0x56, 0x01, 0x00, 0x00, 0x00, 0x00]);
+  assert.equal(verifyMagicBytes(flv, 'flv').valid, true);
+  assert.equal(verifyMagicBytes(Buffer.from('texto plano') as unknown as Uint8Array, 'flv').valid, false);
+
+  const asf = new Uint8Array([0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xd1, 0x11]);
+  assert.equal(verifyMagicBytes(asf, 'wmv').valid, true);
+  assert.equal(verifyMagicBytes(asf, 'wma').valid, true);
+
+  const mpeg = new Uint8Array([0x00, 0x00, 0x01, 0xba, 0x21, 0x00, 0x01, 0x00]);
+  assert.equal(verifyMagicBytes(mpeg, 'mpg').valid, true);
+  assert.equal(verifyMagicBytes(mpeg, 'mpeg').valid, true);
+
+  const oggs = new Uint8Array([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00]);
+  assert.equal(verifyMagicBytes(oggs, 'ogv').valid, true);
+  assert.equal(verifyMagicBytes(oggs, 'opus').valid, true);
+
+  const aiff = new Uint8Array([0x46, 0x4f, 0x52, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x41, 0x49, 0x46, 0x46]);
+  assert.equal(verifyMagicBytes(aiff, 'aiff').valid, true);
+
+  const mp2 = new Uint8Array([0xff, 0xfd, 0x90, 0x64, 0x00, 0x00, 0x00, 0x00]);
+  assert.equal(verifyMagicBytes(mp2, 'mp2').valid, true);
+
+  const tiffLE = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
+  assert.equal(verifyMagicBytes(tiffLE, 'tiff').valid, true);
+  assert.equal(verifyMagicBytes(tiffLE, 'tif').valid, true);
+
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"/>');
+  assert.equal(verifyMagicBytes(svg, 'svg').valid, true);
+
+  const wav = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45]);
+  assert.equal(verifyMagicBytes(wav, 'wav').valid, true);
+
+  const impostor = verifyMagicBytes(Buffer.from('no soy un vídeo avi real....') as unknown as Uint8Array, 'avi');
+  assert.equal(impostor.valid, false);
+  assert.ok(impostor.reason?.includes('.avi'));
+
+  const fakeTiff = verifyMagicBytes(Buffer.from('finge ser tiff........') as unknown as Uint8Array, 'tiff');
+  assert.equal(fakeTiff.valid, false);
+  assert.ok(fakeTiff.reason);
+});
+
 test('buildOutputFilename genera nombres limpios con la extensión correcta', () => {
   assert.equal(buildOutputFilename('factura.enero.pdf', 'png', 'pag1'), 'factura.enero-pag1.png');
   assert.equal(buildOutputFilename('../retrato.jpeg', '.webp'), 'retrato.webp');

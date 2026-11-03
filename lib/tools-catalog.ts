@@ -56,7 +56,7 @@ export interface KastralTool {
 export const CATEGORY_LABELS: Record<ToolCategory, { name: string; description: string }> = {
   imagen: {
     name: 'Imágenes',
-    description: 'Conversión entre PNG, JPEG, WebP, AVIF, GIF y BMP con control exacto de calidad y dimensiones.',
+    description: 'Conversión entre PNG, JPEG, WebP, AVIF, TIFF y BMP con control exacto de calidad y dimensiones.',
   },
   pdf: {
     name: 'PDF',
@@ -68,11 +68,11 @@ export const CATEGORY_LABELS: Record<ToolCategory, { name: string; description: 
   },
   audio: {
     name: 'Audio',
-    description: 'Convierte pistas entre MP3, WAV, AAC, FLAC y OGG ajustando el bitrate con FFmpeg.',
+    description: 'Convierte pistas entre MP3, WAV, AAC, FLAC, OGG, M4A, Opus y AIFF ajustando el bitrate con FFmpeg.',
   },
   video: {
     name: 'Vídeo',
-    description: 'Comprime vídeo, cambia entre MP4, WebM y MKV, redimensiona o extrae la pista de audio.',
+    description: 'Comprime vídeo, cambia entre MP4, WebM, MKV, MOV, AVI y FLV, redimensiona o extrae la pista de audio.',
   },
   archivos: {
     name: 'Comprimidos',
@@ -84,12 +84,12 @@ export const KASTRAL_TOOLS: KastralTool[] = [
   // ================= IMÁGENES =================
   {
     slug: 'convertir-imagen',
-    title: 'Convertidor de Imágenes (PNG, JPG, WebP, AVIF)',
+    title: 'Convertidor de Imágenes (PNG, JPG, WebP, AVIF, TIFF, BMP)',
     shortTitle: 'Convertir Imagen',
     category: 'imagen',
     categoryLabel: 'Imágenes',
     description:
-      'Convierte imágenes entre PNG, JPEG, WebP y AVIF con ajuste preciso de calidad y procesamiento por lotes. También acepta GIF y BMP como entrada.',
+      'Convierte imágenes entre PNG, JPEG, WebP, AVIF, TIFF y BMP con ajuste preciso de calidad y procesamiento por lotes. También acepta GIF y SVG como entrada.',
     metaTitle: 'Convertir Imágenes a PNG, JPG, WebP y AVIF Gratis | Kastral',
     metaDescription:
       'Convierte fotos e imágenes entre PNG, JPEG, WebP y AVIF desde el navegador. Ajusta la calidad, procesa por lotes y descarga al instante.',
@@ -97,9 +97,9 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Navegador + Servidor Sharp/Pillow',
     engineNotice:
       'PNG, JPEG y WebP pueden procesarse directamente en tu navegador para máxima rapidez o en el servidor para AVIF y lotes pesados.',
-    acceptedExtensions: ['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.bmp'],
-    acceptedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp'],
-    outputFormats: ['webp', 'jpg', 'png', 'avif'],
+    acceptedExtensions: ['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.bmp', '.tiff', '.tif', '.svg'],
+    acceptedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp', 'image/tiff', 'image/svg+xml'],
+    outputFormats: ['webp', 'jpg', 'png', 'avif', 'tiff', 'bmp'],
     defaultOutputFormat: 'webp',
     maxFileSizeMB: 35,
     maxBatchFiles: 20,
@@ -129,13 +129,13 @@ export const KASTRAL_TOOLS: KastralTool[] = [
       },
     ],
     steps: [
-      'Arrastra una o varias imágenes en formato PNG, JPG, WebP, AVIF, GIF o BMP.',
+      'Arrastra una o varias imágenes en formato PNG, JPG, WebP, AVIF, TIFF, BMP, GIF o SVG.',
       'Selecciona el formato de salida deseado y ajusta el nivel de calidad si corresponde.',
       'Pulsa en Procesar archivos y descarga cada imagen individualmente o todas juntas en un archivo ZIP.',
     ],
     limitations: [
       'Al convertir imágenes GIF animadas a formatos estáticos (PNG, JPG), se conserva únicamente el primer fotograma.',
-      'Los formatos GIF y BMP se admiten como entrada, pero no como salida: la salida puede ser PNG, JPG, WebP o AVIF.',
+      'Los formatos GIF y SVG se admiten como entrada, pero no como salida: la salida puede ser PNG, JPG, WebP, AVIF, TIFF o BMP.',
     ],
     faqs: [
       {
@@ -166,9 +166,9 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Optimización Local y Servidor',
     engineNotice:
       'La compresión se realiza optimizando las tablas de color y el factor de calidad. Puedes comparar exactamente el ahorro de peso antes de descargar.',
-    acceptedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.avif'],
-    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
-    outputFormats: ['keep', 'webp', 'jpg', 'avif'],
+    acceptedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.tiff', '.tif', '.svg'],
+    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/tiff', 'image/svg+xml'],
+    outputFormats: ['keep', 'webp', 'jpg', 'avif', 'tiff', 'bmp'],
     defaultOutputFormat: 'keep',
     maxFileSizeMB: 35,
     maxBatchFiles: 20,
@@ -235,9 +235,9 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Escalado Bicúbico / Lanczos',
     engineNotice:
       'Puedes redimensionar tus imágenes localmente en el navegador o mediante el motor del servidor con interpolación Lanczos.',
-    acceptedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.avif'],
-    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
-    outputFormats: ['keep', 'png', 'jpg', 'webp'],
+    acceptedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.tiff', '.tif', '.svg'],
+    acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/tiff', 'image/svg+xml'],
+    outputFormats: ['keep', 'png', 'jpg', 'webp', 'tiff', 'bmp'],
     defaultOutputFormat: 'keep',
     maxFileSizeMB: 35,
     maxBatchFiles: 20,
@@ -602,12 +602,12 @@ export const KASTRAL_TOOLS: KastralTool[] = [
   // ================= DOCUMENTOS =================
   {
     slug: 'convertir-documento',
-    title: 'Convertidor de Documentos (DOCX, TXT, HTML, PDF)',
+    title: 'Convertidor de Documentos (DOCX, TXT, HTML, PDF, EPUB)',
     shortTitle: 'Convertir Documento',
     category: 'documentos',
     categoryLabel: 'Documentos',
     description:
-      'Convierte documentos DOCX, TXT, Markdown y RTF a PDF, HTML limpio o texto plano conservando la estructura semántica.',
+      'Convierte documentos DOCX, TXT, Markdown y RTF a PDF, EPUB, HTML limpio o texto plano conservando la estructura semántica.',
     metaTitle: 'Convertir Documentos DOCX y TXT a PDF o HTML Gratis | Kastral',
     metaDescription:
       'Transforma documentos Word (DOCX) y archivos de texto (TXT, MD) a PDF, HTML o texto limpio sin instalar programas.',
@@ -623,7 +623,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
       'application/rtf',
       'text/rtf',
     ],
-    outputFormats: ['pdf', 'txt', 'html'],
+    outputFormats: ['pdf', 'txt', 'html', 'epub'],
     defaultOutputFormat: 'pdf',
     maxFileSizeMB: 25,
     maxBatchFiles: 10,
@@ -632,12 +632,13 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     parameters: [],
     steps: [
       'Selecciona tu archivo DOCX, TXT, Markdown o RTF.',
-      'Elige el formato de destino: PDF para compartir, HTML para publicar en web o TXT para extraer el texto limpio.',
+      'Elige el formato de destino: PDF para compartir, HTML para publicar en web, TXT para extraer el texto limpio o EPUB para libros electrónicos (solo desde Markdown, TXT o HTML).',
       'Descarga el documento convertido al instante.',
     ],
     limitations: [
       'La conversión de DOCX a PDF sin LibreOffice reconstruye el flujo de texto, encabezados y párrafos de forma limpia, pero no replica diseños complejos a varias columnas, macros ni fuentes propietarias incrustadas.',
       'El formato antiguo .DOC binario (Word 97-2003) requiere conversión en un entorno con LibreOffice completo.',
+      'La salida EPUB solo está disponible desde archivos Markdown, TXT o HTML.',
     ],
     faqs: [
       {
@@ -709,22 +710,22 @@ export const KASTRAL_TOOLS: KastralTool[] = [
   // ================= AUDIO =================
   {
     slug: 'convertir-audio',
-    title: 'Convertidor de Audio (MP3, WAV, AAC, FLAC, OGG)',
+    title: 'Convertidor de Audio (MP3, WAV, AAC, FLAC, OGG, M4A, Opus, AIFF)',
     shortTitle: 'Convertir Audio',
     category: 'audio',
     categoryLabel: 'Audio',
     description:
-      'Convierte archivos de sonido y música entre MP3, WAV, AAC (M4A), FLAC y OGG Vorbis ajustando el bitrate mediante FFmpeg.',
+      'Convierte archivos de sonido y música entre MP3, WAV, AAC (M4A), FLAC, OGG Vorbis, Opus y AIFF ajustando el bitrate mediante FFmpeg.',
     metaTitle: 'Convertir Audio a MP3, WAV, FLAC y AAC Gratis | Kastral',
     metaDescription:
       'Convierte pistas de audio entre MP3, WAV, FLAC, AAC y OGG con FFmpeg. Ajusta la calidad de bitrate (128k a 320k) sin marcas ni registros.',
     engine: 'server',
     engineBadge: 'Servidor (Motor FFmpeg)',
     engineNotice:
-      'La codificación de audio se ejecuta en el servidor con FFmpeg real utilizando los códecs libmp3lame, pcm_s16le, aac, flac y libvorbis.',
-    acceptedExtensions: ['.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'],
-    acceptedMimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/mp4', 'audio/flac', 'audio/ogg'],
-    outputFormats: ['mp3', 'wav', 'aac', 'flac', 'ogg'],
+      'La codificación de audio se ejecuta en el servidor con FFmpeg real utilizando los códecs libmp3lame, pcm_s16le, aac, flac, libvorbis, libopus y pcm_s16be.',
+    acceptedExtensions: ['.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg', '.opus', '.wma', '.aiff', '.mp2'],
+    acceptedMimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/mp4', 'audio/flac', 'audio/ogg', 'audio/opus', 'audio/x-ms-wma', 'audio/aiff', 'audio/mp2'],
+    outputFormats: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'opus', 'aiff'],
     defaultOutputFormat: 'mp3',
     maxFileSizeMB: 50,
     maxBatchFiles: 10,
@@ -746,7 +747,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     ],
     steps: [
       'Selecciona uno o varios archivos de audio desde tu equipo.',
-      'Elige el formato de destino (MP3, WAV, AAC, FLAC u OGG) y la tasa de bits deseada.',
+      'Elige el formato de destino (MP3, WAV, AAC, FLAC, OGG, M4A, Opus o AIFF) y la tasa de bits deseada.',
       'Inicia la codificación y descarga el archivo de audio procesado.',
     ],
     limitations: [
@@ -765,12 +766,12 @@ export const KASTRAL_TOOLS: KastralTool[] = [
   // ================= VÍDEO =================
   {
     slug: 'convertir-video',
-    title: 'Convertidor de Vídeo (MP4, WebM, MKV)',
+    title: 'Convertidor de Vídeo (MP4, WebM, MKV, MOV, AVI, FLV)',
     shortTitle: 'Convertir Vídeo',
     category: 'video',
     categoryLabel: 'Vídeo',
     description:
-      'Transforma tus clips de vídeo entre contenedores MP4 (H.264), WebM (VP9) y MKV con control de resolución mediante FFmpeg.',
+      'Transforma tus clips de vídeo entre contenedores MP4 (H.264), WebM (VP9), MKV, MOV (H.264), AVI (MPEG-4) y FLV con control de resolución mediante FFmpeg.',
     metaTitle: 'Convertir Vídeo a MP4, WebM y MKV Gratis Online | Kastral',
     metaDescription:
       'Convierte vídeos a formato MP4 compatible con todos los navegadores y móviles, WebM o MKV utilizando FFmpeg.',
@@ -778,9 +779,9 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Servidor (Motor FFmpeg)',
     engineNotice:
       'El vídeo se sube temporalmente al servidor para ser transcodificado con FFmpeg. Sujeto al límite de tiempo de ejecución de 60 segundos por tarea.',
-    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
-    outputFormats: ['mp4', 'webm', 'mkv'],
+    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.3gp', '.ogv'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg', 'video/x-m4v', 'video/3gpp', 'video/ogg'],
+    outputFormats: ['mp4', 'webm', 'mkv', 'mov', 'avi', 'flv'],
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
     maxBatchFiles: 3,
@@ -831,8 +832,8 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Servidor (FFmpeg H.264 CRF)',
     engineNotice:
       'La compresión ajusta el parámetro CRF de H.264 y opcionalmente reduce la escala del vídeo en el servidor.',
-    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
+    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.3gp', '.ogv'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg', 'video/x-m4v', 'video/3gpp', 'video/ogg'],
     outputFormats: ['mp4'],
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
@@ -895,9 +896,9 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     engineBadge: 'Servidor (FFmpeg Demux/Audio)',
     engineNotice:
       'FFmpeg descarta la pista de vídeo y codifica únicamente el flujo de sonido en MP3 o WAV.',
-    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
-    outputFormats: ['mp3', 'wav', 'aac'],
+    acceptedExtensions: ['.mp4', '.webm', '.mkv', '.mov', '.avi', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.3gp', '.ogv'],
+    acceptedMimeTypes: ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/x-msvideo', 'video/avi', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg', 'video/x-m4v', 'video/3gpp', 'video/ogg'],
+    outputFormats: ['mp3', 'wav', 'aac', 'm4a', 'opus', 'aiff'],
     defaultOutputFormat: 'mp3',
     maxFileSizeMB: 50,
     maxBatchFiles: 5,
@@ -917,7 +918,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     ],
     steps: [
       'Selecciona el vídeo del que deseas obtener el sonido.',
-      'Elige MP3 (compatible y ligero) o WAV (sin compresión).',
+      'Elige MP3 (compatible y ligero), WAV o AIFF (sin compresión), M4A, Opus u OGG.',
       'Pulsa en Procesar y descarga el archivo de audio extraído.',
     ],
     limitations: [

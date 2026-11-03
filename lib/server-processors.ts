@@ -273,6 +273,80 @@ export async function createAndRunServerTask(options: {
   return taskState;
 }
 
+/**
+ * Codifica píxeles RGB/RGBA a BMP de 24 bits (cabecera BITMAPINFOHEADER,
+ * filas de abajo arriba con relleno a múltiplo de 4). Sharp no escribe BMP.
+ */
+function encodeBmp24Bit(width: number, height: number, pixels: Buffer, channels: number): Buffer {
+  const stride = Math.floor((width * 3 + 3) / 4) * 4;
+  const pixelData = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const srcRow = height - 1 - y;
+    for (let x = 0; x < width; x++) {
+      const si = (srcRow * width + x) * channels;
+      const di = y * stride + x * 3;
+      pixelData[di] = pixels[si + 2];
+      pixelData[di + 1] = pixels[si + 1];
+      pixelData[di + 2] = pixels[si];
+    }
+  }
+  const header = Buffer.alloc(54);
+  header.write('BM', 0);
+  header.writeUInt32LE(54 + pixelData.length, 2);
+  header.writeUInt32LE(0, 6);
+  header.writeUInt32LE(54, 10);
+  header.writeUInt32LE(40, 14);
+  header.writeInt32LE(width, 18);
+  header.writeInt32LE(height, 22);
+  header.writeUInt16LE(1, 26);
+  header.writeUInt16LE(24, 28);
+  header.writeUInt32LE(0, 30);
+  header.writeUInt32LE(pixelData.length, 34);
+  return Buffer.concat([header, pixelData]);
+}
+
+/**
+ * Genera un EPUB 2 mínimo y válido: mimetype sin comprimir en primer lugar,
+ * container.xml, content.opf con manifiesto/spine y un capítulo XHTML.
+ */
+async function buildMinimalEpub(title: string, bodyHtml: string): Promise<Buffer> {
+  const safeTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const bookId = `urn:uuid:${crypto.randomUUID()}`;
+  const chapter =
+    `<?xml version="1.0" encoding="utf-8"?>\n` +
+    `<!DOCTYPE html>\n` +
+    `<html xmlns="http://www.w3.org/1999/xhtml" lang="es">\n` +
+    `<head><title>${safeTitle}</title></head>\n<body>\n${bodyHtml}\n</body>\n</html>`;
+  const opf =
+    `<?xml version="1.0" encoding="utf-8"?>\n` +
+    `<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="id" version="2.0">\n` +
+    `<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n` +
+    `<dc:title>${safeTitle}</dc:title>\n<dc:language>es</dc:language>\n<dc:identifier id="id">${bookId}</dc:identifier>\n` +
+    `</metadata>\n<manifest>\n` +
+    `<item id="cap1" href="capitulo-1.xhtml" media-type="application/xhtml+xml"/>\n` +
+    `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx"/>\n` +
+    `</manifest>\n<spine toc="ncx">\n<itemref idref="cap1"/>\n</spine>\n</package>`;
+  const ncx =
+    `<?xml version="1.0" encoding="utf-8"?>\n` +
+    `<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">\n` +
+    `<head><meta name="dtb:uid" content="${bookId}"/></head>\n` +
+    `<docTitle><text>${safeTitle}</text></docTitle>\n` +
+    `<navMap><navPoint id="n1" playOrder="1"><navLabel><text>${safeTitle}</text></navLabel>` +
+    `<content src="capitulo-1.xhtml"/></navPoint></navMap>\n</ncx>`;
+  const container =
+    `<?xml version="1.0" encoding="utf-8"?>\n` +
+    `<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n` +
+    `<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>\n` +
+    `</container>`;
+  const zip = new JSZip();
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+  zip.file('META-INF/container.xml', container);
+  zip.file('OEBPS/content.opf', opf);
+  zip.file('OEBPS/toc.ncx', ncx);
+  zip.file('OEBPS/capitulo-1.xhtml', chapter);
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
 async function executeServerTool(
   task: ServerTaskState,
   inputPath: string,
@@ -282,24 +356,25 @@ async function executeServerTool(
   task.progress = 30;
   const slug = task.toolSlug;
 
-  // 1. IMÁGENES EN SERVIDOR (Sharp: AVIF, WebP, PNG, JPEG, Redimensionado)
+  // 1. IMÁGENES EN SERVIDOR (Sharp: AVIF, WebP, PNG, JPEG, TIFF, BMP, Redimensionado)
   if (['convertir-imagen', 'comprimir-imagen', 'redimensionar-imagen'].includes(slug)) {
-    const allowedImageFormats = ['png', 'jpg', 'jpeg', 'webp', 'avif'];
+    const allowedImageFormats = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'tiff', 'tif', 'bmp'];
     const origExt = task.originalName.split('.').pop()?.toLowerCase() || 'webp';
     const requested = targetFormat.toLowerCase();
     // Sin allowlist, un formato inventado acuñaba `nombre.exe` con MIME falso
     // (phishing con adjuntos firmados por el propio dominio).
     if (requested !== 'keep' && !allowedImageFormats.includes(requested)) {
-      throw new Error(`Formato de salida no soportado: "${targetFormat}". Usa: WEBP, JPG, PNG o AVIF.`);
+      throw new Error(`Formato de salida no soportado: "${targetFormat}". Usa: WEBP, JPG, PNG, AVIF, TIFF o BMP.`);
     }
+    const canon = (e: string) => (e === 'jpeg' ? 'jpg' : e === 'tif' ? 'tiff' : e);
     const resolvedFmt =
       targetFormat === 'keep'
-        ? origExt === 'jpeg'
-          ? 'jpg'
-          : ['png', 'jpg', 'webp', 'avif'].includes(origExt)
-            ? origExt
+        ? ['png', 'jpg', 'webp', 'avif', 'tiff', 'bmp'].includes(canon(origExt))
+          ? canon(origExt)
+          : origExt === 'svg'
+            ? 'png'
             : 'webp'
-        : requested;
+        : canon(requested);
 
     const quality = Math.min(100, Math.max(10, Number(params.quality ?? 80)));
     let pipeline = sharp(inputPath, { failOn: 'none' }).rotate();
@@ -328,12 +403,28 @@ async function executeServerTool(
       pipeline = pipeline.webp({ quality });
     } else if (resolvedFmt === 'png') {
       pipeline = pipeline.png({ compressionLevel: 9, palette: quality < 90 });
-    } else {
+    } else if (resolvedFmt === 'tiff') {
+      pipeline = pipeline.tiff({ compression: 'lzw', quality });
+    } else if (resolvedFmt !== 'bmp') {
       pipeline = pipeline.flatten({ background: '#ffffff' }).jpeg({ quality, mozjpeg: true });
     }
 
     const outName = buildOutputFilename(task.originalName, resolvedFmt);
     const outPath = path.join(task.workDir, `output-${crypto.randomBytes(4).toString('hex')}.${resolvedFmt}`);
+    // BMP no lo escribe Sharp en este proyecto: se vuelca a RGB crudo y se codifica a mano.
+    if (resolvedFmt === 'bmp') {
+      let rawInfo;
+      try {
+        rawInfo = await pipeline.flatten({ background: '#ffffff' }).raw().toBuffer({ resolveWithObject: true });
+      } catch (err) {
+        const cause = err instanceof Error ? summarizeToolError(err.message) : 'error desconocido del motor';
+        throw new Error(`No se pudo generar la imagen de salida en formato BMP desde "${task.originalName}": ${cause}`);
+      }
+      const bmp = encodeBmp24Bit(rawInfo.info.width, rawInfo.info.height, rawInfo.data, rawInfo.info.channels);
+      await fs.writeFile(outPath, bmp);
+      await finalizeTaskOutput(task, outPath, outName, 'image/bmp', `${rawInfo.info.width}×${rawInfo.info.height} px`);
+      return;
+    }
     let info;
     try {
       info = await pipeline.toFile(outPath);
@@ -344,7 +435,14 @@ async function executeServerTool(
       );
     }
 
-    await finalizeTaskOutput(task, outPath, outName, `image/${resolvedFmt === 'jpg' ? 'jpeg' : resolvedFmt}`, `${info.width}×${info.height} px`);
+    const mimeByFormat: Record<string, string> = { jpg: 'image/jpeg', tiff: 'image/tiff' };
+    await finalizeTaskOutput(
+      task,
+      outPath,
+      outName,
+      mimeByFormat[resolvedFmt] || `image/${resolvedFmt}`,
+      `${info.width}×${info.height} px`
+    );
     return;
   }
 
@@ -466,10 +564,10 @@ async function executeServerTool(
     return;
   }
 
-  // 4. CONVERTIR DOCUMENTO (DOCX / TXT / MD / RTF -> PDF / HTML / TXT)
+  // 4. CONVERTIR DOCUMENTO (DOCX / TXT / MD / RTF / HTML -> PDF / HTML / TXT / EPUB)
   if (slug === 'convertir-documento') {
     const origExt = task.originalName.split('.').pop()?.toLowerCase() || 'txt';
-    const outFmt = ['pdf', 'html', 'txt'].includes(targetFormat.toLowerCase())
+    const outFmt = ['pdf', 'html', 'txt', 'epub'].includes(targetFormat.toLowerCase())
       ? targetFormat.toLowerCase()
       : 'pdf';
 
@@ -526,6 +624,19 @@ ${htmlBody}
 </html>`;
       await fs.writeFile(outPath, fullHtml, 'utf-8');
       await finalizeTaskOutput(task, outPath, outName, 'text/html;charset=utf-8', 'Documento HTML5 semántico');
+      return;
+    }
+
+    // Generar EPUB mínimo y válido (solo desde texto/Markdown/HTML)
+    if (outFmt === 'epub') {
+      if (!['md', 'txt', 'html'].includes(origExt)) {
+        throw new Error(
+          `El formato EPUB solo se genera desde Markdown, TXT o HTML; "${task.originalName}" es .${origExt.toUpperCase()}.`
+        );
+      }
+      const epubBuf = await buildMinimalEpub(task.originalName, htmlBody);
+      await fs.writeFile(outPath, epubBuf);
+      await finalizeTaskOutput(task, outPath, outName, 'application/epub+zip', 'EPUB válido con capítulo XHTML');
       return;
     }
 
@@ -617,6 +728,9 @@ ${htmlBody}
       aac: { codec: ['-c:a', 'aac'], mime: 'audio/aac' },
       flac: { codec: ['-c:a', 'flac'], mime: 'audio/flac' },
       ogg: { codec: ['-c:a', 'libvorbis'], mime: 'audio/ogg' },
+      m4a: { codec: ['-c:a', 'aac'], mime: 'audio/mp4' },
+      opus: { codec: ['-c:a', 'libopus'], mime: 'audio/opus' },
+      aiff: { codec: ['-c:a', 'pcm_s16be'], mime: 'audio/aiff' },
     };
 
     const fmt = allowedFormats[targetFormat.toLowerCase()] ? targetFormat.toLowerCase() : 'mp3';
@@ -627,7 +741,7 @@ ${htmlBody}
     const outPath = path.join(task.workDir, `audio-${crypto.randomBytes(4).toString('hex')}.${fmt}`);
     const args = ['-y', '-i', inputPath, '-vn', ...spec.codec];
 
-    if (['mp3', 'aac', 'ogg'].includes(fmt)) {
+    if (['mp3', 'aac', 'ogg', 'm4a', 'opus'].includes(fmt)) {
       args.push('-b:a', bitrate);
     }
     args.push(outPath);
@@ -649,14 +763,14 @@ ${htmlBody}
       outPath,
       outName,
       spec.mime,
-      `Audio ${fmt.toUpperCase()} (${['wav', 'flac'].includes(fmt) ? 'Sin pérdida PCM/FLAC' : bitrate})`
+      `Audio ${fmt.toUpperCase()} (${['wav', 'flac', 'aiff'].includes(fmt) ? 'Sin pérdida PCM/FLAC' : bitrate})`
     );
     return;
   }
 
   // 6. VÍDEO: CONVERSIÓN Y COMPRESIÓN (FFmpeg)
   if (slug === 'convertir-video' || slug === 'comprimir-video') {
-    const fmt = ['mp4', 'webm', 'mkv'].includes(targetFormat.toLowerCase())
+    const fmt = ['mp4', 'webm', 'mkv', 'mov', 'avi', 'flv'].includes(targetFormat.toLowerCase())
       ? targetFormat.toLowerCase()
       : 'mp4';
 
@@ -674,6 +788,26 @@ ${htmlBody}
 
     if (fmt === 'webm') {
       args.push('-c:v', 'libvpx-vp9', '-crf', crf, '-b:v', '0', '-deadline', 'realtime', '-cpu-used', '4', '-c:a', 'libvorbis');
+    } else if (fmt === 'avi') {
+      // Contenedor AVI clásico: vídeo MPEG-4 Parte 2 + audio MP3.
+      const aviQ = crf === '24' ? '2' : crf === '33' ? '8' : '5';
+      args.push('-c:v', 'mpeg4', '-q:v', aviQ, '-c:a', 'libmp3lame', '-b:a', '128k');
+    } else if (fmt === 'flv') {
+      // Contenedor Flash: H.264 + audio MP3.
+      args.push(
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-crf',
+        crf,
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'libmp3lame',
+        '-b:a',
+        '128k'
+      );
     } else {
       args.push(
         '-c:v',
@@ -705,6 +839,9 @@ ${htmlBody}
       mp4: 'video/mp4',
       webm: 'video/webm',
       mkv: 'video/x-matroska',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      flv: 'video/x-flv',
     };
 
     const outName = buildOutputFilename(task.originalName, fmt, slug === 'comprimir-video' ? 'comprimido' : undefined);

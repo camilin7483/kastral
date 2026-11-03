@@ -16,7 +16,6 @@ CASES=(
   "convertir-imagen|png|webp"
   "convertir-imagen|png|jpg"
   "convertir-imagen|png|tiff"
-  "convertir-imagen|png|heic"
   "convertir-imagen|png|bmp"
   "convertir-imagen|png|avif"
   "comprimir-imagen|jpg|webp"

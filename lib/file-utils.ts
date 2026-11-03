@@ -226,6 +226,101 @@ export function verifyMagicBytes(buffer: Uint8Array, expectedExtension: string):
       : { valid: false, detectedType: 'unknown', reason: 'El archivo .avi no tiene una cabecera RIFF/AVI válida.' };
   }
 
+  // WAV: RIFF....WAVE
+  if (ext === 'wav') {
+    const isRiff = b0 === 0x52 && b1 === 0x49 && b2 === 0x46 && b3 === 0x46;
+    const isWave =
+      buffer.byteLength >= 12 && buffer[8] === 0x57 && buffer[9] === 0x41 && buffer[10] === 0x56 && buffer[11] === 0x45;
+    return isRiff && isWave
+      ? { valid: true, detectedType: 'audio/wav' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .wav no tiene una cabecera RIFF/WAVE válida.' };
+  }
+
+  // FLV: "FLV\x01"
+  if (ext === 'flv') {
+    const isFlv = b0 === 0x46 && b1 === 0x4c && b2 === 0x56 && b3 === 0x01;
+    return isFlv
+      ? { valid: true, detectedType: 'video/x-flv' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .flv no tiene una firma FLV válida (FLV\\x01).' };
+  }
+
+  // WMV / WMA: cabecera ASF (0x30 0x26 0xB2 ...)
+  if (ext === 'wmv' || ext === 'wma') {
+    const isAsf = b0 === 0x30 && b1 === 0x26 && b2 === 0xb2;
+    const mime = ext === 'wmv' ? 'video/x-ms-wmv' : 'audio/x-ms-wma';
+    return isAsf
+      ? { valid: true, detectedType: mime }
+      : { valid: false, detectedType: 'unknown', reason: `El archivo .${ext} no tiene una cabecera ASF válida.` };
+  }
+
+  // MOV / M4V / 3GP / M4A: caja "ftyp" en el desplazamiento 4
+  if (ext === 'mov' || ext === 'm4v' || ext === '3gp' || ext === 'm4a') {
+    const mimeMap: Record<string, string> = {
+      mov: 'video/quicktime',
+      m4v: 'video/x-m4v',
+      '3gp': 'video/3gpp',
+      m4a: 'audio/mp4',
+    };
+    return hasFtypBox(buffer)
+      ? { valid: true, detectedType: mimeMap[ext] }
+      : { valid: false, detectedType: 'unknown', reason: `El archivo .${ext} no contiene una caja ftyp válida.` };
+  }
+
+  // MPG / MPEG: arranque de paquete MPEG-PS (00 00 01 BA/BB) o de secuencia (B3)
+  if (ext === 'mpg' || ext === 'mpeg') {
+    const isMpeg =
+      b0 === 0x00 && b1 === 0x00 && b2 === 0x01 && (b3 === 0xba || b3 === 0xbb || b3 === 0xb3);
+    return isMpeg
+      ? { valid: true, detectedType: 'video/mpeg' }
+      : { valid: false, detectedType: 'unknown', reason: `El archivo .${ext} no tiene un arranque MPEG válido.` };
+  }
+
+  // OGV / OPUS: contenedor Ogg ("OggS")
+  if (ext === 'ogv' || ext === 'opus') {
+    const isOgg = b0 === 0x4f && b1 === 0x67 && b2 === 0x67 && b3 === 0x53;
+    const mime = ext === 'ogv' ? 'video/ogg' : 'audio/opus';
+    return isOgg
+      ? { valid: true, detectedType: mime }
+      : { valid: false, detectedType: 'unknown', reason: `El archivo .${ext} no tiene una cabecera Ogg válida (OggS).` };
+  }
+
+  // AIFF: "FORM"...."AIFF"
+  if (ext === 'aiff') {
+    const isForm = b0 === 0x46 && b1 === 0x4f && b2 === 0x52 && b3 === 0x4d;
+    const isAiff =
+      buffer.byteLength >= 12 && buffer[8] === 0x41 && buffer[9] === 0x49 && buffer[10] === 0x46 && buffer[11] === 0x46;
+    return isForm && isAiff
+      ? { valid: true, detectedType: 'audio/aiff' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .aiff no tiene una cabecera FORM/AIFF válida.' };
+  }
+
+  // MP2: sincronía de trama MPEG-audio (0xFF + 3 bits altos)
+  if (ext === 'mp2') {
+    const isFrameSync = b0 === 0xff && (b1 & 0xe0) === 0xe0;
+    return isFrameSync
+      ? { valid: true, detectedType: 'audio/mp2' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .mp2 no tiene una trama de audio MPEG válida.' };
+  }
+
+  // TIFF / TIF: "II*\0" (little-endian) o "MM\0*" (big-endian)
+  if (ext === 'tiff' || ext === 'tif') {
+    const isTiff =
+      (b0 === 0x49 && b1 === 0x49 && b2 === 0x2a && b3 === 0x00) ||
+      (b0 === 0x4d && b1 === 0x4d && b2 === 0x00 && b3 === 0x2a);
+    return isTiff
+      ? { valid: true, detectedType: 'image/tiff' }
+      : { valid: false, detectedType: 'unknown', reason: `El archivo .${ext} no tiene una cabecera TIFF válida.` };
+  }
+
+  // SVG: documento XML de texto que empieza por <svg o <?xml
+  if (ext === 'svg') {
+    const head = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.byteLength, 256))).trimStart().toLowerCase();
+    const isSvg = head.startsWith('<svg') || head.startsWith('<?xml');
+    return isSvg
+      ? { valid: true, detectedType: 'image/svg+xml' }
+      : { valid: false, detectedType: 'unknown', reason: 'El archivo .svg no parece un documento SVG válido.' };
+  }
+
   // ZIP / DOCX / XLSX / ODS (basados en contenedor PK\x03\x04)
   if (['zip', 'docx', 'xlsx', 'ods'].includes(ext)) {
     const isPkZip = b0 === 0x50 && b1 === 0x4b && (b2 === 0x03 || b2 === 0x05);
@@ -251,13 +346,23 @@ export function verifyMagicBytes(buffer: Uint8Array, expectedExtension: string):
     return { valid: true, detectedType: 'text/plain' };
   }
 
-  // Para otros formatos multimedia (MP4, MP3, WAV, FLAC, OGG, AVIF, MKV, WEBM)
+  // Para otros formatos multimedia (MP4, MP3, AAC, FLAC, OGG, AVIF, MKV, WEBM)
   // verificamos que tenga al menos 16 bytes de cabecera y delegamos la validación profunda a FFmpeg/Sharp
   if (buffer.byteLength < 12) {
     return { valid: false, detectedType: 'corrupt', reason: 'El archivo es demasiado pequeño o está truncado.' };
   }
 
   return { valid: true, detectedType: `media/${ext}` };
+}
+
+/**
+ * Detecta la caja "ftyp" (ISO Base Media) en el desplazamiento 4,
+ * común a MOV, M4V, 3GP, M4A y MP4.
+ */
+function hasFtypBox(buffer: Uint8Array): boolean {
+  return (
+    buffer.byteLength >= 12 && buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70
+  );
 }
 
 /**

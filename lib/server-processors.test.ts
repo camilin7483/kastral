@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
+import JSZip from 'jszip';
 import {
   createAndRunServerTask,
   cleanupExpiredTasks,
@@ -297,4 +298,268 @@ test('Motor de servidor: rechaza dimensiones absurdas sin reservar memoria', asy
 
   assert.equal(task.status, 'failed');
   assert.match(task.error || '', /8000 px/);
+});
+
+async function generateMp4Fixture(dir: string): Promise<Buffer> {
+  const outPath = path.join(dir, 'fixture.mp4');
+  await execFileAsync('ffmpeg', [
+    '-hide_banner', '-y',
+    '-f', 'lavfi', '-i', 'testsrc=size=64x64:duration=1:rate=10',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+    outPath,
+  ]);
+  return fs.readFile(outPath);
+}
+
+async function generateWavFixture(dir: string): Promise<Buffer> {
+  const outPath = path.join(dir, 'fixture.wav');
+  await execFileAsync('ffmpeg', [
+    '-hide_banner', '-y',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+    '-c:a', 'pcm_s16le',
+    outPath,
+  ]);
+  return fs.readFile(outPath);
+}
+
+test('Motor de servidor: convierte MP4 real a MOV (H.264+AAC)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-mov-'));
+  try {
+    const mp4 = await generateMp4Fixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-video',
+      fileBuffer: mp4,
+      originalName: 'clip.mp4',
+      targetFormat: 'mov',
+      params: { crf: '28', resolution: 'original' },
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'clip.mov');
+    assert.equal(task.outputMimeType, 'video/quicktime');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(4, 8).toString(), 'ftyp');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte MP4 real a AVI (MPEG-4+MP3)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-avi-out-'));
+  try {
+    const mp4 = await generateMp4Fixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-video',
+      fileBuffer: mp4,
+      originalName: 'clip.mp4',
+      targetFormat: 'avi',
+      params: { crf: '28', resolution: 'original' },
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'clip.avi');
+    assert.equal(task.outputMimeType, 'video/x-msvideo');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(out.subarray(8, 12).toString(), 'AVI ');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte MP4 real a FLV (H.264+MP3)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-flv-'));
+  try {
+    const mp4 = await generateMp4Fixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-video',
+      fileBuffer: mp4,
+      originalName: 'clip.mp4',
+      targetFormat: 'flv',
+      params: { crf: '28', resolution: 'original' },
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'clip.flv');
+    assert.equal(task.outputMimeType, 'video/x-flv');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(0, 3).toString(), 'FLV');
+    assert.equal(out[3], 0x01);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte WAV real a M4A (AAC en MP4)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-m4a-'));
+  try {
+    const wav = await generateWavFixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-audio',
+      fileBuffer: wav,
+      originalName: 'nota.wav',
+      targetFormat: 'm4a',
+      params: { bitrate: '128k' },
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'nota.m4a');
+    assert.equal(task.outputMimeType, 'audio/mp4');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(4, 8).toString(), 'ftyp');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte WAV real a Opus (libopus)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-opus-'));
+  try {
+    const wav = await generateWavFixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-audio',
+      fileBuffer: wav,
+      originalName: 'nota.wav',
+      targetFormat: 'opus',
+      params: { bitrate: '128k' },
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'nota.opus');
+    assert.equal(task.outputMimeType, 'audio/opus');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(0, 4).toString(), 'OggS');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte WAV real a AIFF (PCM 16-bit)', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kastral-aiff-'));
+  try {
+    const wav = await generateWavFixture(dir);
+    const task = await createAndRunServerTask({
+      toolSlug: 'convertir-audio',
+      fileBuffer: wav,
+      originalName: 'nota.wav',
+      targetFormat: 'aiff',
+      params: {},
+    });
+
+    assert.equal(task.status, 'completed');
+    assert.equal(task.outputFilename, 'nota.aiff');
+    assert.equal(task.outputMimeType, 'audio/aiff');
+    assert.ok((task.outputSize || 0) > 0);
+    const out = await fs.readFile(task.outputFilePath!);
+    assert.equal(out.subarray(0, 4).toString(), 'FORM');
+    assert.equal(out.subarray(8, 12).toString(), 'AIFF');
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('Motor de servidor: convierte PNG real a TIFF (LZW)', async () => {
+  const pngBuffer = await sharp({
+    create: { width: 128, height: 96, channels: 3, background: { r: 30, g: 120, b: 200 } },
+  })
+    .png()
+    .toBuffer();
+
+  const task = await createAndRunServerTask({
+    toolSlug: 'convertir-imagen',
+    fileBuffer: pngBuffer,
+    originalName: 'foto.png',
+    targetFormat: 'tiff',
+    params: { quality: 80 },
+  });
+
+  assert.equal(task.status, 'completed');
+  assert.equal(task.outputFilename, 'foto.tiff');
+  assert.equal(task.outputMimeType, 'image/tiff');
+  assert.ok((task.outputSize || 0) > 0);
+  const out = await fs.readFile(task.outputFilePath!);
+  const magic = out.subarray(0, 4).toString('latin1');
+  assert.ok(magic === 'II*\0' || magic === 'MM\0*');
+});
+
+test('Motor de servidor: convierte PNG real a BMP 24-bit', async () => {
+  const pngBuffer = await sharp({
+    create: { width: 64, height: 48, channels: 3, background: { r: 200, g: 60, b: 30 } },
+  })
+    .png()
+    .toBuffer();
+
+  const task = await createAndRunServerTask({
+    toolSlug: 'convertir-imagen',
+    fileBuffer: pngBuffer,
+    originalName: 'foto.png',
+    targetFormat: 'bmp',
+    params: { quality: 80 },
+  });
+
+  assert.equal(task.status, 'completed');
+  assert.equal(task.outputFilename, 'foto.bmp');
+  assert.equal(task.outputMimeType, 'image/bmp');
+  assert.ok((task.outputSize || 0) > 0);
+  const out = await fs.readFile(task.outputFilePath!);
+  assert.equal(out.subarray(0, 2).toString(), 'BM');
+  const pixelOffset = out.readUInt32LE(10);
+  const width = out.readInt32LE(18);
+  const height = out.readInt32LE(22);
+  const stride = Math.floor((width * 3 + 3) / 4) * 4;
+  assert.equal(width, 64);
+  assert.equal(height, 48);
+  assert.equal(out.length, pixelOffset + stride * height);
+});
+
+test('Motor de servidor: convierte Markdown real a EPUB válido', async () => {
+  const mdBuffer = Buffer.from('# Guía Kastral\n\nEste es el primer capítulo del libro de prueba.\n', 'utf-8');
+
+  const task = await createAndRunServerTask({
+    toolSlug: 'convertir-documento',
+    fileBuffer: mdBuffer,
+    originalName: 'guia.md',
+    targetFormat: 'epub',
+    params: {},
+  });
+
+  assert.equal(task.status, 'completed');
+  assert.equal(task.outputFilename, 'guia.epub');
+  assert.equal(task.outputMimeType, 'application/epub+zip');
+  assert.ok((task.outputSize || 0) > 0);
+  const out = await fs.readFile(task.outputFilePath!);
+  assert.equal(out.subarray(0, 2).toString(), 'PK');
+
+  const zip = await JSZip.loadAsync(out);
+  assert.deepEqual(Object.keys(zip.files)[0], 'mimetype');
+  assert.equal(await zip.file('mimetype')!.async('string'), 'application/epub+zip');
+  assert.ok(zip.file('META-INF/container.xml'));
+  assert.ok(zip.file('OEBPS/content.opf'));
+  const chapter = await zip.file('OEBPS/capitulo-1.xhtml')!.async('string');
+  assert.ok(chapter.includes('Guía Kastral'));
+});
+
+test('Motor de servidor: rechaza formato inventado (.exe) sin acuñar MIME falso', async () => {
+  const pngBuffer = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: { r: 9, g: 9, b: 9 } },
+  })
+    .png()
+    .toBuffer();
+
+  const task = await createAndRunServerTask({
+    toolSlug: 'convertir-imagen',
+    fileBuffer: pngBuffer,
+    originalName: 'prueba.png',
+    targetFormat: 'exe',
+    params: {},
+  });
+
+  assert.equal(task.status, 'failed');
+  assert.match(task.error || '', /no soportado/i);
 });

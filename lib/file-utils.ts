@@ -45,7 +45,17 @@ export function sanitizeFilename(rawName: string): string {
 
   // Evitar nombres ocultos que empiecen por punto o vacíos
   const withoutLeadingDot = cleaned.replace(/^\.+/, '');
-  return withoutLeadingDot.slice(0, 120) || 'archivo';
+  if (withoutLeadingDot.length <= 120) {
+    return withoutLeadingDot || 'archivo';
+  }
+  // Al truncar, conserva la extensión para que el archivo siga abriéndose.
+  const dot = withoutLeadingDot.lastIndexOf('.');
+  if (dot > 0 && withoutLeadingDot.length - dot <= 12) {
+    const ext = withoutLeadingDot.slice(dot);
+    const stem = withoutLeadingDot.slice(0, 120 - ext.length).trimEnd();
+    return `${stem}${ext}`;
+  }
+  return withoutLeadingDot.slice(0, 120).trimEnd() || 'archivo';
 }
 
 /**

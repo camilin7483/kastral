@@ -1,6 +1,6 @@
 # Kastral — Convierte. Comprime. Simplifica.
 
-Plataforma gratuita de conversión, compresión y optimización de archivos: **17 herramientas** que procesan imágenes, PDF, documentos, hojas de cálculo, audio, vídeo y ZIP. Arquitectura honesta *navegador primero, servidor solo cuando hace falta*, con app de escritorio **Tauri 2** para Linux y Windows.
+Plataforma gratuita de conversión, compresión y optimización de archivos: **19 herramientas** que procesan imágenes, PDF, documentos, hojas de cálculo, audio, vídeo y ZIP. Arquitectura honesta *navegador primero, servidor solo cuando hace falta*, con app de escritorio **Tauri 2** para Linux y Windows.
 
 > **Por qué Kastral en vez de ILovePDF / SmallPDF / Convertio:** tus archivos se procesan en tu propio dispositivo siempre que es técnicamente posible (privacidad real, no promesas), la app de escritorio funciona sin cuentas ni telemetría, y cada límite (tamaños, tiempos, formatos) está documentado abajo en vez de descubrirlo con un error de pago.
 
@@ -8,7 +8,7 @@ Plataforma gratuita de conversión, compresión y optimización de archivos: **1
 
 | Dónde se procesa | Herramientas |
 |---|---|
-| 100 % en tu navegador (offline) | Combinar PDF, Dividir PDF, Extraer páginas, Imágenes a PDF, Crear/Extraer ZIP, XLSX a CSV/JSON, TXT/MD a PDF/HTML, Convertir imagen (PNG/JPG/WebP), Redimensionar |
+| 100 % en tu navegador (offline) | Combinar PDF, Dividir PDF, Girar PDF, Marca de agua PDF, Extraer páginas, Imágenes a PDF, Crear/Extraer ZIP, XLSX a CSV/JSON, TXT/MD a PDF/HTML, Convertir imagen (PNG/JPG/WebP), Redimensionar |
 | Servidor local o comandos Tauri (FFmpeg, Ghostscript, Sharp) | Comprimir PDF, PDF a imágenes, Convertir/Comprimir vídeo, Convertir audio, Extraer audio, AVIF |
 
 - **Web (`app/`, `components/`, `lib/`)**: Next.js 15 (App Router), React 19, TypeScript estricto, Tailwind. Las herramientas pesadas usan rutas `/api/v1/*` (Sharp, Ghostscript, FFmpeg, Mammoth, pdf-lib).
@@ -18,10 +18,10 @@ Plataforma gratuita de conversión, compresión y optimización de archivos: **1
 ## Estructura
 
 ```text
-├── app/                          # Next.js: home, herramientas/[slug] (17 fichas SSG), legales, contacto
+├── app/                          # Next.js: home, herramientas/[slug] (19 fichas SSG), legales, contacto
 │   └── api/v1/                   # health, process, tasks/[taskId], download/[taskId] (solo web)
-├── components/                   # FileWorkbench (navegador → servidor → Tauri), catálogo, Header/Footer
-├── lib/                          # tools-catalog (17 tools), browser/server-processors, file-utils, tauri-engine
+├── components/                   # FileWorkbench (navegador → servidor → Tauri), toasts, catálogo, Header/Footer
+├── lib/                          # tools-catalog (19 tools), browser/server-processors, download-manager, tauri-engine
 ├── src-tauri/                    # App Tauri: main.rs, engines/{images,audio,video,pdf,document}.rs
 │   ├── binaries/                 # Sidecars por plataforma (gitignored; ver README interno)
 │   └── tauri.conf.json           # bundle NSIS (win) + deb/AppImage (linux)
@@ -38,8 +38,8 @@ Requisitos: **bun 1.4+**, **Node 20+**, **FFmpeg** y **Ghostscript** (para los 6
 bun install                    # dependencias
 cp .env.example .env.local      # variables (ver tabla)
 bun run dev                    # http://localhost:3000
-bun test lib/                  # 19 tests (motores navegador + validación)
-python3 -m pytest backend -q   # 4 tests (FastAPI)
+bun test lib/                  # 74 tests (motores navegador, contratos del catálogo, descargas y versiones)
+python3 -m pytest backend -q   # 8 tests (FastAPI)
 bun run lint                   # 0 errores
 bun run build                  # standalone (.next/standalone/server.js)
 ```
@@ -52,7 +52,7 @@ Requisitos extra: **Rust estable**, dependencias WebKit (`webkit2gtk` en Linux; 
 bun run build:tauri            # exportación estática a out/ (mueve app/api y la restaura)
 cargo tauri dev                # ventana de escritorio contra http://localhost:3000
 cargo tauri build --bundles appimage,deb   # instaladores Linux (.deb válido, AppImage)
-cargo test --manifest-path src-tauri/Cargo.toml   # 30 tests Rust (motores + validación + contrato IPC)
+cargo test --manifest-path src-tauri/Cargo.toml   # 54 tests Rust (motores + validación + guardado nativo + contrato IPC)
 ```
 
 Notas:
@@ -60,6 +60,16 @@ Notas:
 - El export estático usa `KASTRAL_EXPORT=1`; el build por defecto sigue siendo `standalone`.
 - `src-tauri/binaries/` está gitignored: la CI descarga FFmpeg/Ghostscript por plataforma (ver `binaries/README.md`). En Linux el `.deb` incluye FFmpeg y espera `ghostscript` del sistema; en Windows el NSIS incluye ambos.
 - `kastral_process(tool_slug, file_name, target_format, params_json, data_b64)` replica el contrato de `/api/v1/process` (mismos whitelists, mismos mensajes en español).
+- `kastral_save_output(file_name, data_b64)` escribe el resultado en la carpeta de Descargas del sistema con nombres libres de colisiones (`archivo (1).ext`) y devuelve la ruta absoluta.
+
+## Descargas con ubicación
+
+Cada descarga muestra una notificación con el nombre, el peso y **dónde quedó el archivo**:
+
+- **App de escritorio (Tauri):** se guarda en la carpeta de Descargas nativa y la notificación incluye la ruta absoluta, con un botón **Mostrar en carpeta**.
+- **Navegador (Chrome/Edge):** se abre el selector nativo de guardado, así que la ubicación la eliges tú; la notificación confirma la acción.
+- **Navegadores sin selector de archivos:** descarga clásica en la carpeta de descargas del navegador, indicada de forma honesta (el navegador no expone la ruta del sistema por privacidad).
+- El historial **Descargas de esta sesión** conserva las últimas seis descargas con su ubicación y hora.
 
 ## Variables de entorno
 
@@ -78,7 +88,7 @@ Notas:
 - **Release** (`release.yml`): al pushear un tag `v*` compila NSIS (Windows) y deb/AppImage (Linux) con sidecars y los publica en GitHub Releases con SHA256SUMS.
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1   # dispara el release
+git tag v0.2.0 && git push origin v0.2.0   # dispara el release
 ```
 
 ## ⚠️ Límites honestos (léeme antes de procesar)
@@ -109,12 +119,12 @@ bun run build && bun run start   # http://localhost:3000, sin telemetría
 
 | Aspecto | Kastral | Terceros |
 |---|---|---|
-| Procesamiento en tu dispositivo cuando es posible | ✔ 11 herramientas con modo navegador (`lib/tools-catalog.ts`, `app/como-funciona`) | ≈/varía (centrado en servidor) |
+| Procesamiento en tu dispositivo cuando es posible | ✔ 13 herramientas con modo navegador (`lib/tools-catalog.ts`, `app/como-funciona`) | ≈/varía (centrado en servidor) |
 | Registro para uso básico | ✔ Sin registro (`app/privacidad`) | ≈/varía según plan |
 | App de escritorio sin conexión | ✔ Tauri, sin cuentas ni telemetría (`src-tauri/`) | ≈/varía |
 | Límites publicados por herramienta | ✔ 25–100 MB (`app/condiciones`, fichas) | ≈/varía según plan |
 | Marcas de agua | ✔ Sin marcas de agua | ≈/varía según plan |
-| Amplitud de formatos | ≈ 17 herramientas de uso común | ✔ Convertio: catálogo más amplio |
+| Amplitud de formatos | ≈ 19 herramientas de uso común | ✔ Convertio: catálogo más amplio |
 | OCR / firma electrónica / API pública | ✘ No disponibles | ≈/varía según plan |
 
 Ver detalle y matices en [`app/por-que-kastral/page.tsx`](./app/por-que-kastral/page.tsx).

@@ -7,6 +7,8 @@ import {
   mergePdfsInBrowser,
   splitPdfInBrowser,
   extractPdfPagesInBrowser,
+  rotatePdfInBrowser,
+  addWatermarkToPdfInBrowser,
   convertDocumentInBrowser,
   convertSpreadsheetInBrowser,
   createZipInBrowser,
@@ -144,6 +146,66 @@ test('Motor Local (Offline): bloquea Zip Slip real y reporta ZIP corrupto con ho
   });
   await assert.rejects(extractZipInBrowser(corrupt), (err: Error) => {
     assert.ok(err.message.includes('dañado') || err.message.includes('soportado'));
+    return true;
+  });
+});
+
+test('Motor Local (Offline): girar páginas concretas de un PDF 180 grados', async () => {
+  const pdf = await createSamplePdfFile('giro-prueba.pdf', 3);
+  const result = await rotatePdfInBrowser(pdf, { angle: 180, pages: '1,3' });
+
+  assert.equal(result.mimeType, 'application/pdf');
+  assert.ok(result.outputFilename.endsWith('-girado.pdf'));
+
+  const loaded = await PDFDocument.load(await result.outputBlob.arrayBuffer());
+  assert.equal(loaded.getPageCount(), 3);
+  assert.equal(loaded.getPage(0).getRotation().angle, 180);
+  assert.equal(loaded.getPage(1).getRotation().angle, 0);
+  assert.equal(loaded.getPage(2).getRotation().angle, 180);
+});
+
+test('Motor Local (Offline): girar PDF rechaza rangos inválidos y archivos no PDF', async () => {
+  const pdf = await createSamplePdfFile('giro-invalido.pdf', 2);
+  await assert.rejects(rotatePdfInBrowser(pdf, { angle: 90, pages: '9-12' }), (err: Error) => {
+    assert.ok(err.message.length > 0);
+    return true;
+  });
+
+  const falso = new File(['esto no es un pdf'], 'falso.pdf', { type: 'application/pdf' });
+  await assert.rejects(rotatePdfInBrowser(falso, { angle: 90, pages: 'all' }), (err: Error) => {
+    assert.ok(err.message.includes('PDF válido'));
+    return true;
+  });
+});
+
+test('Motor Local (Offline): girar PDF normaliza ángulos no admitidos a 90 grados', async () => {
+  const pdf = await createSamplePdfFile('giro-normalizado.pdf', 1);
+  const result = await rotatePdfInBrowser(pdf, { angle: 45, pages: 'all' });
+  const loaded = await PDFDocument.load(await result.outputBlob.arrayBuffer());
+  assert.equal(loaded.getPage(0).getRotation().angle, 90);
+});
+
+test('Motor Local (Offline): añadir marca de agua a un PDF de 2 páginas', async () => {
+  const pdf = await createSamplePdfFile('informe-marca.pdf', 2);
+  const result = await addWatermarkToPdfInBrowser(pdf, {
+    text: 'CONFIDENCIAL',
+    opacity: 30,
+    fontSize: 48,
+    position: 'diagonal',
+  });
+
+  assert.equal(result.mimeType, 'application/pdf');
+  assert.ok(result.outputFilename.endsWith('-marca-agua.pdf'));
+  assert.ok(result.outputSize > 0);
+
+  const loaded = await PDFDocument.load(await result.outputBlob.arrayBuffer());
+  assert.equal(loaded.getPageCount(), 2);
+});
+
+test('Motor Local (Offline): la marca de agua rechaza el texto vacío', async () => {
+  const pdf = await createSamplePdfFile('marca-vacia.pdf', 1);
+  await assert.rejects(addWatermarkToPdfInBrowser(pdf, { text: '   ' }), (err: Error) => {
+    assert.ok(err.message.includes('vacío'));
     return true;
   });
 });

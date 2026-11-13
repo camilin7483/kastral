@@ -7,6 +7,11 @@ mod engines;
 /// para no reservar memoria desproporcionada ante entradas hostiles.
 const MAX_B64_LEN: usize = 4 * engines::MAX_INPUT_BYTES / 3 + 4096;
 
+/// Los resultados generados pueden ser mayores que la entrada (por ejemplo,
+/// un ZIP de varios archivos). El guardado nativo admite hasta 100 MB.
+const MAX_SAVE_BYTES: usize = 100 * 1024 * 1024;
+const MAX_SAVE_B64_LEN: usize = 4 * MAX_SAVE_BYTES / 3 + 4096;
+
 fn json_failed(msg: &str) -> String {
     serde_json::json!({"status": "failed", "error": msg}).to_string()
 }
@@ -173,9 +178,95 @@ fn kastral_process_inner(
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![kastral_process])
+        .invoke_handler(tauri::generate_handler![
+            kastral_process,
+            kastral_save_output
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Devuelve una ruta dentro de `dir` sin colisionar: `archivo.ext`,
+/// luego `archivo (1).ext`, `archivo (2).ext`, ... hasta 999; después
+/// añade una marca de tiempo para garantizar progreso.
+fn unique_output_path(dir: &std::path::Path, filename: &str) -> std::path::PathBuf {
+    let (stem, ext) = match filename.rfind('.') {
+        Some(i) if i > 0 => (&filename[..i], Some(&filename[i + 1..])),
+        _ => (filename, None),
+    };
+    let first = dir.join(filename);
+    if !first.exists() {
+        return first;
+    }
+    for n in 1..=999 {
+        let name = match ext {
+            Some(e) => format!("{stem} ({n}).{e}"),
+            None => format!("{stem} ({n})"),
+        };
+        let candidate = dir.join(name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let name = match ext {
+        Some(e) => format!("{stem}-{nanos}.{e}"),
+        None => format!("{stem}-{nanos}"),
+    };
+    dir.join(name)
+}
+
+/// Lógica del guardado sin depender de Tauri: valida, decodifica,
+/// sanea el nombre, elige ruta única dentro de `dir` y escribe.
+/// `dir` debe ser la carpeta de Descargas ya creada por el llamador.
+fn kastral_save_output_inner(dir: &std::path::Path, file_name: &str, data_b64: &str) -> String {
+    if data_b64.len() > MAX_SAVE_B64_LEN {
+        return json_failed(
+            "El resultado supera el límite de 100 MB permitido para guardar en la aplicación de escritorio.",
+        );
+    }
+    let data =
+        match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_b64.trim()) {
+            Ok(d) if !d.is_empty() => d,
+            _ => return json_failed("No se pudo leer el archivo recibido."),
+        };
+    let mut safe = engines::sanitize_filename(file_name);
+    if safe.is_empty() {
+        safe = String::from("kastral-resultado.bin");
+    }
+    let target = unique_output_path(dir, &safe);
+    if std::fs::write(&target, &data).is_err() {
+        return json_failed("No se pudo guardar el archivo en la carpeta de Descargas.");
+    }
+    let filename = target
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or(safe);
+    serde_json::json!({
+        "status": "completed",
+        "path": target.to_string_lossy(),
+        "filename": filename,
+        "size": data.len(),
+    })
+    .to_string()
+}
+
+/// Guarda el resultado en la carpeta de Descargas del SO y devuelve
+/// un JSON con la ruta final. Nunca escribe fuera de Descargas.
+#[tauri::command]
+fn kastral_save_output(app: tauri::AppHandle, file_name: String, data_b64: String) -> String {
+    use tauri::Manager;
+    let dir = match app.path().download_dir() {
+        Ok(d) => d,
+        Err(_) => return json_failed("No se pudo localizar la carpeta de Descargas."),
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return json_failed("No se pudo preparar la carpeta de Descargas.");
+    }
+    kastral_save_output_inner(&dir, &file_name, &data_b64)
 }
 
 #[cfg(test)]
@@ -343,5 +434,95 @@ mod tests {
         assert_eq!(v["status"], "failed");
         let msg = v["error"].as_str().unwrap_or("");
         assert!(!msg.is_empty() && msg.contains("PDF"), "mensaje: {msg}");
+    }
+
+    fn temp_test_dir(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "kastral-save-test-{}-{}-{nanos}",
+            std::process::id(),
+            tag
+        ));
+        std::fs::create_dir_all(&dir).expect("crear dir temporal de test");
+        dir
+    }
+
+    #[test]
+    fn unique_path_respeta_colisiones_y_extension() {
+        let dir = temp_test_dir("colision");
+        assert_eq!(
+            super::unique_output_path(&dir, "archivo.pdf"),
+            dir.join("archivo.pdf")
+        );
+        std::fs::write(dir.join("archivo.pdf"), b"x").unwrap();
+        assert_eq!(
+            super::unique_output_path(&dir, "archivo.pdf"),
+            dir.join("archivo (1).pdf")
+        );
+        std::fs::write(dir.join("archivo (1).pdf"), b"x").unwrap();
+        assert_eq!(
+            super::unique_output_path(&dir, "archivo.pdf"),
+            dir.join("archivo (2).pdf")
+        );
+        std::fs::write(dir.join("nota"), b"x").unwrap();
+        assert_eq!(
+            super::unique_output_path(&dir, "nota"),
+            dir.join("nota (1)")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_saneado_no_escapa_de_descargas() {
+        let dir = temp_test_dir("escape");
+        let safe = engines::sanitize_filename("../../etc/passwd");
+        assert_eq!(safe, "passwd");
+        let target = super::unique_output_path(&dir, &safe);
+        assert_eq!(target.parent(), Some(dir.as_path()));
+        assert!(target.starts_with(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_rechaza_base64_invalido_en_espanol() {
+        let dir = temp_test_dir("invalido");
+        let out = super::kastral_save_output_inner(&dir, "salida.pdf", "!!!no-es-base64!!!");
+        let v: serde_json::Value = serde_json::from_str(&out).expect("respuesta JSON válida");
+        assert_eq!(v["status"], "failed");
+        let msg = v["error"].as_str().unwrap_or("");
+        assert!(!msg.is_empty(), "mensaje vacío");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_rechaza_b64_sobredimensionado_antes_de_decodificar() {
+        let dir = temp_test_dir("grande");
+        let too_big = "A".repeat(super::MAX_SAVE_B64_LEN + 1);
+        let out = super::kastral_save_output_inner(&dir, "salida.pdf", &too_big);
+        let v: serde_json::Value = serde_json::from_str(&out).expect("respuesta JSON válida");
+        assert_eq!(v["status"], "failed");
+        let msg = v["error"].as_str().unwrap_or("");
+        assert!(msg.contains("100 MB"), "mensaje: {msg}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_exito_escribe_dentro_del_dir() {
+        let dir = temp_test_dir("exito");
+        let payload = b"hola kastral".to_vec();
+        let out = super::kastral_save_output_inner(&dir, "hola.txt", &b64(&payload));
+        let v: serde_json::Value = serde_json::from_str(&out).expect("respuesta JSON válida");
+        assert_eq!(v["status"], "completed", "respuesta: {out}");
+        let path = v["path"].as_str().expect("path presente");
+        let name = v["filename"].as_str().expect("filename presente");
+        assert_eq!(v["size"].as_u64().unwrap_or(0), payload.len() as u64);
+        let written = std::path::PathBuf::from(path);
+        assert!(written.starts_with(&dir), "fuera del dir: {path}");
+        assert_eq!(written.file_name().unwrap().to_string_lossy(), name);
+        assert_eq!(std::fs::read(&written).unwrap(), payload);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

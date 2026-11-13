@@ -427,7 +427,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     defaultOutputFormat: 'zip',
     maxFileSizeMB: 50,
     maxBatchFiles: 5,
-    supportsMultiple: false,
+    supportsMultiple: true,
     parameters: [],
     steps: [
       'Selecciona el archivo PDF que deseas separar.',
@@ -466,7 +466,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     outputFormats: ['pdf'],
     defaultOutputFormat: 'pdf',
     maxFileSizeMB: 50,
-    maxBatchFiles: 5,
+    maxBatchFiles: 1,
     supportsMultiple: false,
     parameters: [
       {
@@ -493,6 +493,155 @@ export const KASTRAL_TOOLS: KastralTool[] = [
       },
     ],
     relatedSlugs: ['dividir-pdf', 'combinar-pdf', 'pdf-a-imagenes'],
+  },
+  {
+    slug: 'girar-pdf',
+    title: 'Girar Páginas de un PDF',
+    shortTitle: 'Girar PDF',
+    category: 'pdf',
+    categoryLabel: 'PDF',
+    description:
+      'Rota las páginas que elijas de un documento PDF en ángulos de 90, 180 o 270 grados directamente en tu navegador.',
+    metaTitle: 'Girar Páginas de un PDF Gratis Online | Kastral',
+    metaDescription:
+      'Rota todas las páginas de un PDF o solo los rangos que indiques (por ejemplo: 1-3,5) en 90, 180 o 270 grados desde tu navegador.',
+    engine: 'browser',
+    engineBadge: 'Navegador (pdf-lib)',
+    engineNotice:
+      'La rotación de páginas se aplica íntegramente en tu navegador sin subir el documento a ningún servidor.',
+    acceptedExtensions: ['.pdf'],
+    acceptedMimeTypes: ['application/pdf'],
+    outputFormats: ['pdf'],
+    defaultOutputFormat: 'pdf',
+    maxFileSizeMB: 50,
+    maxBatchFiles: 10,
+    supportsMultiple: true,
+    parameters: [
+      {
+        id: 'angle',
+        label: 'Ángulo de giro',
+        type: 'select',
+        defaultValue: '90',
+        options: [
+          { label: '90° (Un cuarto de vuelta)', value: '90' },
+          { label: '180° (Media vuelta)', value: '180' },
+          { label: '270° (Tres cuartos de vuelta)', value: '270' },
+        ],
+        description: 'Grados que se sumarán a la rotación actual de cada página seleccionada.',
+      },
+      {
+        id: 'pages',
+        label: 'Páginas a girar',
+        type: 'text',
+        defaultValue: 'all',
+        description: 'Todas las páginas o rangos como 1-3,5.',
+      },
+    ],
+    steps: [
+      'Selecciona el archivo PDF cuyas páginas quieras girar.',
+      'Elige el ángulo de giro e indica si quieres rotar todas las páginas o solo un rango (por ejemplo: 1-3,5).',
+      'Procesa el documento y descarga el PDF con las páginas giradas.',
+    ],
+    limitations: [
+      'La rotación se suma a la orientación actual de cada página: girar dos veces 90° equivale a un giro de 180°.',
+    ],
+    faqs: [
+      {
+        question: '¿Puedo girar solo algunas páginas del PDF?',
+        answer:
+          'Sí. Escribe "all" para girarlas todas o indica páginas concretas con rangos separados por comas, por ejemplo "1, 3-5", y solo esas páginas rotarán.',
+      },
+      {
+        question: '¿Se pierde calidad al girar las páginas?',
+        answer:
+          'No. La rotación solo cambia el indicador de orientación de cada página sin recodificar su contenido, así que el texto y las imágenes quedan intactos.',
+      },
+    ],
+    relatedSlugs: ['extraer-paginas-pdf', 'dividir-pdf', 'combinar-pdf'],
+  },
+  {
+    slug: 'marca-agua-pdf',
+    title: 'Añadir Marca de Agua a un PDF',
+    shortTitle: 'Marca de Agua PDF',
+    category: 'pdf',
+    categoryLabel: 'PDF',
+    description:
+      'Estampa un texto de marca de agua (por ejemplo: CONFIDENCIAL) en todas las páginas de tu PDF con opacidad y tamaño ajustables.',
+    metaTitle: 'Añadir Marca de Agua a un PDF Gratis Online | Kastral',
+    metaDescription:
+      'Añade una marca de agua de texto en diagonal o centrada a cualquier PDF desde tu navegador, con control de opacidad y tamaño.',
+    engine: 'browser',
+    engineBadge: 'Navegador (pdf-lib)',
+    engineNotice:
+      'La marca de agua se dibuja localmente en tu navegador sobre cada página del documento sin enviarlo a servidores externos.',
+    acceptedExtensions: ['.pdf'],
+    acceptedMimeTypes: ['application/pdf'],
+    outputFormats: ['pdf'],
+    defaultOutputFormat: 'pdf',
+    maxFileSizeMB: 50,
+    maxBatchFiles: 10,
+    supportsMultiple: true,
+    parameters: [
+      {
+        id: 'text',
+        label: 'Texto de la marca de agua',
+        type: 'text',
+        defaultValue: 'CONFIDENCIAL',
+        description: 'Texto que se repetirá en cada página (máximo 80 caracteres).',
+      },
+      {
+        id: 'opacity',
+        label: 'Opacidad',
+        type: 'range',
+        defaultValue: 30,
+        min: 5,
+        max: 80,
+        step: 5,
+        unit: '%',
+        description: 'Transparencia del texto sobre el contenido de la página.',
+      },
+      {
+        id: 'fontSize',
+        label: 'Tamaño de letra',
+        type: 'number',
+        defaultValue: 48,
+        min: 12,
+        max: 120,
+        step: 2,
+        description: 'Altura del texto de la marca de agua en puntos.',
+      },
+      {
+        id: 'position',
+        label: 'Posición',
+        type: 'select',
+        defaultValue: 'diagonal',
+        options: [
+          { label: 'Diagonal (45° en el centro)', value: 'diagonal' },
+          { label: 'Horizontal centrada', value: 'center' },
+        ],
+      },
+    ],
+    steps: [
+      'Selecciona el archivo PDF que quieres marcar.',
+      'Escribe el texto de la marca de agua y ajusta la opacidad, el tamaño y la posición.',
+      'Procesa el documento y descarga el PDF con la marca aplicada en todas las páginas.',
+    ],
+    limitations: [
+      'La marca de agua se dibuja como texto sobre el contenido existente: no elimina ni oculta información del documento original.',
+    ],
+    faqs: [
+      {
+        question: '¿La marca de agua aparece en todas las páginas?',
+        answer:
+          'Sí, el texto se estampa centrado en cada una de las páginas del documento con la misma opacidad y tamaño.',
+      },
+      {
+        question: '¿Puedo usar un texto distinto de CONFIDENCIAL?',
+        answer:
+          'Sí, puedes escribir cualquier texto de hasta 80 caracteres, como "BORRADOR", el nombre de tu empresa o la fecha del documento.',
+      },
+    ],
+    relatedSlugs: ['comprimir-pdf', 'combinar-pdf', 'extraer-paginas-pdf'],
   },
   {
     slug: 'imagenes-a-pdf',
@@ -567,7 +716,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     defaultOutputFormat: 'png',
     maxFileSizeMB: 40,
     maxBatchFiles: 3,
-    supportsMultiple: false,
+    supportsMultiple: true,
     parameters: [
       {
         id: 'dpi',
@@ -785,7 +934,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
     maxBatchFiles: 3,
-    supportsMultiple: false,
+    supportsMultiple: true,
     parameters: [
       {
         id: 'resolution',
@@ -838,7 +987,7 @@ export const KASTRAL_TOOLS: KastralTool[] = [
     defaultOutputFormat: 'mp4',
     maxFileSizeMB: 50,
     maxBatchFiles: 3,
-    supportsMultiple: false,
+    supportsMultiple: true,
     popular: true,
     parameters: [
       {

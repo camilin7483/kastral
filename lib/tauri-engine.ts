@@ -44,6 +44,68 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const reader = new FileReader();
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo generado.'));
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.readAsDataURL(blob);
+  });
+  const comma = dataUrl.indexOf(',');
+  return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+}
+
+export interface TauriSaveResponse {
+  path: string;
+  filename: string;
+  size: number;
+}
+
+// Debe coincidir con MAX_SAVE_BYTES de src-tauri/src/main.rs.
+const MAX_SAVE_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Guarda un resultado directamente en la carpeta de Descargas del sistema
+ * (sin pasar por el diálogo del WebView) y devuelve la ruta absoluta para
+ * que la interfaz pueda decir exactamente dónde quedó el archivo.
+ */
+export async function saveOutputOnTauri(blob: Blob, filename: string): Promise<TauriSaveResponse> {
+  if (!isTauri()) {
+    throw new Error('El guardado nativo solo está disponible en la aplicación de escritorio.');
+  }
+  if (blob.size > MAX_SAVE_BYTES) {
+    throw new Error(
+      'El resultado supera el límite de 100 MB permitido para guardar en la aplicación de escritorio.'
+    );
+  }
+  const dataB64 = await blobToBase64(blob);
+  const { invoke } = await import('@tauri-apps/api/core');
+  const rawText = await invoke<string>('kastral_save_output', {
+    file_name: filename,
+    data_b64: dataB64,
+  });
+  let raw: { status?: string; path?: string; filename?: string; size?: number; error?: string };
+  try {
+    raw = JSON.parse(rawText);
+  } catch {
+    throw new Error('La aplicación de escritorio devolvió una respuesta inesperada.');
+  }
+  if (raw.status !== 'completed' || !raw.path) {
+    throw new Error(raw.error || 'No se pudo guardar el archivo en tu equipo.');
+  }
+  return {
+    path: raw.path,
+    filename: raw.filename || filename,
+    size: raw.size ?? blob.size,
+  };
+}
+
+/** Abre el explorador de archivos del sistema con el resultado seleccionado. */
+export async function revealDownloadOnTauri(path: string): Promise<void> {
+  const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+  await revealItemInDir(path);
+}
+
 export async function processOnTauri(
   file: File,
   toolSlug: string,

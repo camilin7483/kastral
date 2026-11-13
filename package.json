@@ -1,12 +1,13 @@
 {
   "name": "kastral",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "build:tauri": "bun scripts/export-tauri.mjs",
+    "test": "bun test lib/",
     "lint": "eslint .",
     "clean": "next clean",
     "check:branding": "./scripts/check-branding.sh"

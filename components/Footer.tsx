@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { KASTRAL_TOOLS } from '@/lib/tools-catalog';
 
 export function Footer() {
@@ -12,7 +13,7 @@ export function Footer() {
           {/* Brand Column */}
           <div className="md:col-span-4 space-y-4">
             <Link href="/" className="flex items-center gap-3 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              <img
+              <Image
                 src="/assets/brand/image_a3e77aab.png"
                 alt="Icono de Kastral con inicial K"
                 width={36}

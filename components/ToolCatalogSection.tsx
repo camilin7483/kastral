@@ -78,30 +78,36 @@ export function ToolCatalogSection({
       </div>
 
       {/* Controles interactivos de filtrado por categoría */}
-      <div
-        role="tablist"
-        aria-label="Filtrar herramientas por categoría"
-        className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#EAE4DC] dark:bg-[#141417] rounded-xl w-fit border border-[#DCD5CB] dark:border-[#27272D]"
-      >
-        {CATEGORIES.map((cat) => {
-          const active = selectedCategory === cat.id;
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
-                active
-                  ? 'bg-[#C86D2D] text-white shadow-xs'
-                  : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white'
-              }`}
-            >
-              {cat.label}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          role="tablist"
+          aria-label="Filtrar herramientas por categoría"
+          className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#EAE4DC] dark:bg-[#141417] rounded-xl w-fit border border-[#DCD5CB] dark:border-[#27272D]"
+        >
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                  active
+                    ? 'bg-[#C86D2D] text-white shadow-xs'
+                    : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white'
+                }`}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Contador en vivo del catálogo filtrado */}
+        <p aria-live="polite" className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 tabular-nums">
+          {filteredTools.length} {filteredTools.length === 1 ? 'herramienta' : 'herramientas'}
+        </p>
       </div>
 
       {filteredTools.length === 0 ? (
@@ -129,12 +135,18 @@ export function ToolCatalogSection({
             <Link
               key={tool.slug}
               href={`/herramientas/${tool.slug}`}
-              className="group p-5 bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] hover:border-[#C86D2D] dark:hover:border-[#DF7B35] rounded-2xl transition-colors flex flex-col justify-between gap-4"
+              className="group p-5 bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] hover:border-[#C86D2D] dark:hover:border-[#DF7B35] hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none rounded-2xl transition-all duration-200 flex flex-col justify-between gap-4"
             >
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300">
-                  <span>
-                    <strong className="text-[#C86D2D] dark:text-[#DF7B35]">{tool.categoryLabel}</strong> · {tool.engineBadge}
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <strong className="text-[#C86D2D] dark:text-[#DF7B35] whitespace-nowrap">{tool.categoryLabel}</strong>
+                    {tool.popular && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white bg-[#C86D2D] dark:bg-[#DF7B35] rounded-full whitespace-nowrap">
+                        Popular
+                      </span>
+                    )}
+                    <span className="truncate">· {tool.engineBadge}</span>
                   </span>
                   <ArrowUpRight className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-[#C86D2D] dark:group-hover:text-[#DF7B35] transition-colors shrink-0" />
                 </div>

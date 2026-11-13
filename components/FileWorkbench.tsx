@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, memo } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import type { ExtractedArchiveItem } from '@/lib/browser-processors';
 import {
   Upload,
@@ -11,19 +11,27 @@ import {
   Loader2,
   SlidersHorizontal,
   FolderArchive,
+  FolderOpen,
   FileText,
   RefreshCw,
+  History,
+  MapPin,
 } from 'lucide-react';
 import { KastralTool, KASTRAL_TOOLS } from '@/lib/tools-catalog';
 import {
   formatBytes,
   calculateReductionPercentage,
-  sanitizeFilename,
 } from '@/lib/file-utils';
 // Motores pesados (pdf-lib, jszip, xlsx, mammoth) solo bajo demanda:
 // este import dinámico genera un chunk separado y no crece el First Load JS.
 import { CustomSelect } from '@/components/CustomSelect';
-import { isTauri, processOnTauri } from '@/lib/tauri-engine';
+import { useToast } from '@/components/Toast';
+import { isTauri, processOnTauri, revealDownloadOnTauri } from '@/lib/tauri-engine';
+import {
+  buildDownloadToast,
+  saveGeneratedFile,
+  type DownloadRecord,
+} from '@/lib/download-manager';
 
 // Formats the canvas API cannot encode, so they always need the server engine (Sharp).
 const SERVER_ONLY_FORMATS = new Set(['avif']);
@@ -46,6 +54,10 @@ export interface WorkbenchItem {
   // Archivos de origen de una fusión ya completada: permite
   // "Volver a procesar" sin exigir reselección (siguen en memoria).
   sourceFiles?: File[];
+  // Última ubicación donde se guardó este resultado (ruta real en desktop,
+  // etiqueta honesta en navegador). Se muestra en la fila tras descargar.
+  lastSavedLocation?: string;
+  lastSavedPath?: string;
 }
 
 interface FileWorkbenchProps {
@@ -59,10 +71,12 @@ const WorkbenchQueueRow = memo(function WorkbenchQueueRow({
   item,
   onRemove,
   onDownload,
+  onReveal,
 }: {
   item: WorkbenchItem;
   onRemove: (id: string) => void;
-  onDownload: (blob: Blob, filename: string) => void;
+  onDownload: (item: WorkbenchItem, blob: Blob, filename: string) => void;
+  onReveal: (path: string) => void;
 }) {
   const reduction =
     item.status === 'completed' && item.outputSize
@@ -131,14 +145,17 @@ const WorkbenchQueueRow = memo(function WorkbenchQueueRow({
 
           {item.status === 'completed' && item.outputBlob && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+              <span
+                role="status"
+                className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap"
+              >
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Completado</span>
               </span>
 
               <button
                 type="button"
-                onClick={() => onDownload(item.outputBlob!, item.outputFilename || 'resultado')}
+                onClick={() => onDownload(item, item.outputBlob!, item.outputFilename || 'resultado')}
                 title={item.outputFilename}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#C86D2D] hover:bg-[#AD581D] rounded-xl transition-colors cursor-pointer whitespace-nowrap shadow-xs"
               >
@@ -161,6 +178,24 @@ const WorkbenchQueueRow = memo(function WorkbenchQueueRow({
           </button>
         </div>
       </div>
+
+      {item.lastSavedLocation && (
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 min-w-0">
+          <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate" title={item.lastSavedLocation}>
+            Guardado en {item.lastSavedLocation}
+          </span>
+          {item.lastSavedPath && (
+            <button
+              type="button"
+              onClick={() => onReveal(item.lastSavedPath!)}
+              className="shrink-0 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-300 cursor-pointer"
+            >
+              Mostrar
+            </button>
+          )}
+        </div>
+      )}
 
       {item.status === 'processing' && (
         <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
@@ -191,7 +226,7 @@ const WorkbenchQueueRow = memo(function WorkbenchQueueRow({
                   </span>
                   <button
                     type="button"
-                    onClick={() => onDownload(sub.blob, sub.name)}
+                    onClick={() => onDownload(item, sub.blob, sub.name)}
                     className="text-[#C86D2D] dark:text-[#DF7B35] hover:underline font-bold cursor-pointer"
                   >
                     Descargar
@@ -222,7 +257,12 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
   const [isDragging, setIsDragging] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
+  const [showDownloads, setShowDownloads] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
+  const startProcessingRef = useRef<() => void>(() => {});
+  const { toast } = useToast();
 
   const handleSelectTool = (slug: string) => {
     const found = KASTRAL_TOOLS.find((t) => t.slug === slug);
@@ -303,9 +343,9 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     setGlobalError(null);
   };
 
-  const updateItemState = (id: string, patch: Partial<WorkbenchItem>) => {
+  const updateItemState = useCallback((id: string, patch: Partial<WorkbenchItem>) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  };
+  }, []);
 
   /**
    * Progreso vivo para tareas largas (servidor o Tauri): la petición es
@@ -445,6 +485,12 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     if (slug === 'extraer-paginas-pdf') {
       return processors.extractPdfPagesInBrowser(item.file, params, onPct);
     }
+    if (slug === 'girar-pdf') {
+      return processors.rotatePdfInBrowser(item.file, params, onPct);
+    }
+    if (slug === 'marca-agua-pdf') {
+      return processors.addWatermarkToPdfInBrowser(item.file, params, onPct);
+    }
     if (slug === 'convertir-documento') {
       return processors.convertDocumentInBrowser(item.file, fmt, onPct);
     }
@@ -565,6 +611,80 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
       setIsBatchProcessing(false);
     }
   };
+
+  // Mantiene el atajo siempre apuntando a la última versión del handler.
+  useEffect(() => {
+    startProcessingRef.current = handleStartProcessing;
+  });
+
+  // Atajo Ctrl/Cmd + Enter para iniciar el lote sin ratón.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        startProcessingRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Arrastrar y soltar en cualquier parte de la página, y pegar archivos
+  // desde el portapapeles (capturas, PDFs copiados, etc.).
+  useEffect(() => {
+    const hasFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
+    const onDragEnter = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setIsDragging(true);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setIsDragging(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current = 0;
+      setIsDragging(false);
+      if (event.dataTransfer?.files?.length) {
+        addFilesToQueue(event.dataTransfer.files);
+      }
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return;
+      }
+      const files = event.clipboardData?.files;
+      if (files && files.length > 0) {
+        event.preventDefault();
+        addFilesToQueue(files);
+      }
+    };
+
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+      window.removeEventListener('paste', onPaste);
+    };
+  }, [addFilesToQueue]);
 
   const loadVerifiedSampleFile = async () => {
     setGlobalError(null);
@@ -725,16 +845,82 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     }
   };
 
-  const triggerDownloadBlob = useCallback((blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = sanitizeFilename(filename);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  }, []);
+  /**
+   * Guarda un resultado y lo notifica con la ubicación exacta:
+   * - Escritorio Tauri: ruta absoluta dentro de Descargas.
+   * - Navegador con selector nativo: la ubicación elegida por el usuario.
+   * - Resto: la carpeta de descargas del navegador (mensaje honesto).
+   */
+  const handleSaveFile = useCallback(
+    async (blob: Blob, filename: string): Promise<DownloadRecord | null> => {
+      try {
+        const record = await saveGeneratedFile(blob, filename);
+        if (!record) return null;
+        setDownloads((prev) => [record, ...prev].slice(0, 6));
+        const copy = buildDownloadToast(record);
+        const revealable = Boolean(record.path);
+        toast({
+          kind: 'success',
+          title: copy.title,
+          message: copy.message,
+          detail: copy.detail,
+          durationMs: revealable ? 10000 : 7000,
+          actionLabel: revealable ? 'Mostrar en carpeta' : undefined,
+          onAction: revealable
+            ? () => {
+                revealDownloadOnTauri(record.path!).catch(() => {
+                  toast({
+                    kind: 'error',
+                    title: 'No se pudo mostrar el archivo',
+                    message: 'Puede que se haya movido o eliminado de la carpeta de Descargas.',
+                    durationMs: 8000,
+                  });
+                });
+              }
+            : undefined,
+        });
+        return record;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'No se pudo guardar el archivo generado.';
+        toast({
+          kind: 'error',
+          title: 'No se pudo guardar el archivo',
+          message,
+          durationMs: 10000,
+        });
+        return null;
+      }
+    },
+    [toast]
+  );
+
+  const handleRowDownload = useCallback(
+    async (item: WorkbenchItem, blob: Blob, filename: string) => {
+      const record = await handleSaveFile(blob, filename);
+      if (record) {
+        updateItemState(item.id, {
+          lastSavedLocation: record.location,
+          lastSavedPath: record.path,
+        });
+      }
+    },
+    [handleSaveFile, updateItemState]
+  );
+
+  const handleReveal = useCallback(
+    (path: string) => {
+      revealDownloadOnTauri(path).catch(() => {
+        toast({
+          kind: 'error',
+          title: 'No se pudo mostrar el archivo',
+          message: 'Puede que se haya movido o eliminado de la carpeta de Descargas.',
+          durationMs: 8000,
+        });
+      });
+    },
+    [toast]
+  );
 
   const handleDownloadAllAsZip = async () => {
     const completed = items.filter((it) => it.status === 'completed');
@@ -750,10 +936,32 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    triggerDownloadBlob(zipBlob, `kastral-lote-${activeTool.slug}.zip`);
+    await handleSaveFile(zipBlob, `kastral-lote-${activeTool.slug}.zip`);
   };
 
   const completedCount = items.filter((it) => it.status === 'completed').length;
+
+  // Resumen real del lote: la entrada total refleja la cola completa, pero
+  // el ahorro solo compara archivos ya completados (nunca mezcla pendientes).
+  const batchStats = useMemo(() => {
+    let originalBytes = 0;
+    let completedInputBytes = 0;
+    let outputBytes = 0;
+    let completed = 0;
+    for (const item of items) {
+      originalBytes += item.originalSize;
+      if (item.status === 'completed' && typeof item.outputSize === 'number') {
+        completedInputBytes += item.originalSize;
+        outputBytes += item.outputSize;
+        completed += 1;
+      }
+    }
+    const ratio =
+      completedInputBytes > 0 && outputBytes > 0
+        ? Math.round((1 - outputBytes / completedInputBytes) * 100)
+        : null;
+    return { originalBytes, outputBytes, completed, ratio };
+  }, [items]);
 
   // Filtrar parámetros para no mostrar selectores redundantes de servidor vs navegador
   const visibleParameters = activeTool.parameters.filter((p) => p.id !== 'executionMode');
@@ -812,20 +1020,10 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
       </div>
 
       <div className="p-6 space-y-6">
-        {/* Zona Drag & Drop con alto contraste y superficie cálida/oscura */}
+        {/* Zona Drag & Drop con alto contraste y superficie cálida/oscura.
+            El arrastre se escucha a nivel de página para que funcione en
+            cualquier punto de la interfaz (ver overlay más abajo). */}
         <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDragging(false);
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              addFilesToQueue(e.dataTransfer.files);
-            }
-          }}
           className={`border-2 border-dashed rounded-2xl p-8 sm:p-11 text-center transition-all ${
             isDragging
               ? 'border-[#C86D2D] bg-[#C86D2D]/10'
@@ -1042,13 +1240,68 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
               </div>
             </div>
 
+            {/* Resumen real del lote */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-[#F8F5F0] dark:bg-[#18181C] border border-[#DCD5CB] dark:border-[#27272D]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Archivos
+                </p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                  {items.length}
+                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {' '}
+                    · {completedCount} listos
+                  </span>
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-[#F8F5F0] dark:bg-[#18181C] border border-[#DCD5CB] dark:border-[#27272D]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Entrada
+                </p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                  {formatBytes(batchStats.originalBytes)}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-[#F8F5F0] dark:bg-[#18181C] border border-[#DCD5CB] dark:border-[#27272D]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Salida
+                </p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
+                  {batchStats.completed > 0 ? formatBytes(batchStats.outputBytes) : '—'}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-[#F8F5F0] dark:bg-[#18181C] border border-[#DCD5CB] dark:border-[#27272D]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Ahorro total
+                </p>
+                <p
+                  className={`text-sm font-bold tabular-nums ${
+                    batchStats.ratio !== null && batchStats.ratio > 0
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : batchStats.ratio !== null && batchStats.ratio < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-zinc-900 dark:text-zinc-100'
+                  }`}
+                >
+                  {batchStats.ratio !== null
+                    ? batchStats.ratio > 0
+                      ? `-${batchStats.ratio}%`
+                      : batchStats.ratio < 0
+                        ? `+${Math.abs(batchStats.ratio)}%`
+                        : '0%'
+                    : '—'}
+                </p>
+              </div>
+            </div>
+
             <div className="border border-[#DCD5CB] dark:border-[#27272D] rounded-xl divide-y divide-[#DCD5CB] dark:divide-[#27272D] overflow-hidden">
               {items.map((item) => (
                 <WorkbenchQueueRow
                   key={item.id}
                   item={item}
                   onRemove={removeItem}
-                  onDownload={triggerDownloadBlob}
+                  onDownload={handleRowDownload}
+                  onReveal={handleReveal}
                 />
               ))}
             </div>
@@ -1058,7 +1311,10 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 {activeTool.engine === 'server' || SERVER_ONLY_FORMATS.has(targetFormat)
                   ? 'El archivo se procesa con los motores del servidor y se elimina del directorio temporal al terminar.'
-                  : 'Procesamiento inmediato en tu dispositivo sin necesidad de conexión a Internet.'}
+                  : 'Procesamiento inmediato en tu dispositivo sin necesidad de conexión a Internet.'}{' '}
+                <span className="text-zinc-500 dark:text-zinc-500">
+                  Atajo: Ctrl/⌘ + Enter.
+                </span>
               </p>
               <button
                 type="button"
@@ -1087,7 +1343,88 @@ export function FileWorkbench({ initialTool, allowToolSwitch = false }: FileWork
             </div>
           </div>
         )}
+
+        {/* Historial de descargas de la sesión: responde "¿dónde quedó?".
+            Vive fuera de la cola para seguir visible al vaciar la lista. */}
+        {downloads.length > 0 && (
+          <div className="border border-[#DCD5CB] dark:border-[#27272D] rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowDownloads((value) => !value)}
+              aria-expanded={showDownloads}
+              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-[#F8F5F0] dark:bg-[#18181C] hover:bg-[#EAE4DC] dark:hover:bg-[#1E1E24] transition-colors cursor-pointer text-left"
+            >
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                <History className="w-4 h-4 text-[#C86D2D] dark:text-[#DF7B35]" />
+                Descargas de esta sesión ({downloads.length})
+              </span>
+              <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
+                {showDownloads ? 'Ocultar' : 'Mostrar'}
+              </span>
+            </button>
+            {showDownloads && (
+              <ul className="divide-y divide-[#DCD5CB] dark:divide-[#27272D] bg-white dark:bg-[#141417]">
+                {downloads.map((record) => (
+                  <li key={record.id} className="px-4 py-2.5 flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                        {record.filename}{' '}
+                        <span className="font-mono font-normal text-zinc-500 dark:text-zinc-400">
+                          {formatBytes(record.size)}
+                        </span>
+                      </p>
+                      <p
+                        className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate"
+                        title={record.location}
+                      >
+                        {record.mode === 'browser' ? 'En ' : 'Guardado en '}
+                        {record.location}
+                      </p>
+                    </div>
+                    <time className="text-[10px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 shrink-0">
+                      {new Date(record.createdAt).toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </time>
+                    {record.path && (
+                      <button
+                        type="button"
+                        onClick={() => handleReveal(record.path!)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#C86D2D] dark:text-[#DF7B35] hover:underline cursor-pointer shrink-0"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Abrir
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Overlay de arrastre global: indica que se puede soltar en cualquier punto */}
+      {isDragging && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4 sm:p-8"
+        >
+          <div className="absolute inset-0 bg-[#0B0B0D]/75 backdrop-blur-sm" />
+          <div className="relative w-full max-w-2xl rounded-3xl border-2 border-dashed border-[#DF7B35] bg-[#141417]/95 p-10 sm:p-14 text-center shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-[#C86D2D]/20 text-[#DF7B35] flex items-center justify-center mx-auto mb-5">
+              <Upload className="w-8 h-8" />
+            </div>
+            <p className="text-xl sm:text-2xl font-bold text-white">Suelta los archivos aquí</p>
+            <p className="text-sm text-zinc-300 mt-2">
+              Se añadirán a la cola de {activeTool.shortTitle}.
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

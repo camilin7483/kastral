@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { ToastProvider } from '@/components/Toast';
 
-const siteUrl = 'http://localhost:3000';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export const viewport: Viewport = {
   themeColor: '#0B0B0D',
@@ -80,6 +81,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <head>
+        {/* Aplica el tema guardado antes del primer pintado para evitar un destello. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('kastral-theme');document.documentElement.classList.toggle('dark',t!=='light')}catch(e){}`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -89,9 +96,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-screen flex flex-col font-sans antialiased bg-[#F3EFEA] dark:bg-[#0B0B0D] text-[#141413] dark:text-[#F5F4F0] selection:bg-[#C86D2D]/25 selection:text-[#DF7B35]"
         suppressHydrationWarning
       >
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <ToastProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </ToastProvider>
       </body>
     </html>
   );

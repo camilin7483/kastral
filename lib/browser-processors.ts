@@ -1,7 +1,5 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import JSZip from 'jszip';
-import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
+import type { PDFDocument } from 'pdf-lib';
+import type JSZip from 'jszip';
 import {
   sanitizeFilename,
   isSafeArchiveEntryPath,
@@ -156,6 +154,7 @@ export async function convertDocumentInBrowser(
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
   onProgress?.(15);
+  const { default: mammoth } = await import('mammoth');
   const origExt = file.name.split('.').pop()?.toLowerCase() || 'txt';
   const outFmt = ['pdf', 'html', 'txt'].includes(targetFormat.toLowerCase())
     ? targetFormat.toLowerCase()
@@ -238,6 +237,7 @@ ${htmlBody}
   }
 
   // Generar PDF multipágina en el navegador
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontSize = 11;
@@ -328,6 +328,7 @@ export async function mergePdfsInBrowser(
     throw new Error('Selecciona al menos 2 archivos PDF para combinarlos.');
   }
 
+  const { PDFDocument } = await import('pdf-lib');
   const mergedPdf = await PDFDocument.create();
   let totalPages = 0;
 
@@ -374,6 +375,8 @@ export async function splitPdfInBrowser(
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
   onProgress?.(10);
+  const { PDFDocument } = await import('pdf-lib');
+  const { default: JSZip } = await import('jszip');
   const arrayBuffer = await file.arrayBuffer();
   let srcDoc: PDFDocument;
   try {
@@ -389,9 +392,7 @@ export async function splitPdfInBrowser(
 
   const zip = new JSZip();
   const extractedItems: ExtractedArchiveItem[] = [];
-  const baseName = sanitizeFilename(file.name).replace(/\.pdf$/i, '');
-
-  for (let i = 0; i < totalPages; i++) {
+  const baseName = sanitizeFilename(file.name).replace(/\.pdf$/i, '');  for (let i = 0; i < totalPages; i++) {
     const singleDoc = await PDFDocument.create();
     const [copiedPage] = await singleDoc.copyPages(srcDoc, [i]);
     singleDoc.addPage(copiedPage);
@@ -431,6 +432,7 @@ export async function extractPdfPagesInBrowser(
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
   onProgress?.(15);
+  const { PDFDocument } = await import('pdf-lib');
   const arrayBuffer = await file.arrayBuffer();
   const srcDoc = await PDFDocument.load(arrayBuffer);
   const totalPages = srcDoc.getPageCount();
@@ -472,6 +474,7 @@ export async function imagesToPdfInBrowser(
   params: Record<string, string | number | boolean>,
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
+  const { PDFDocument } = await import('pdf-lib');
   const pdfDoc = await PDFDocument.create();
   const pageSizeMode = String(params.pageSize || 'a4');
   const A4_WIDTH = 595.28;
@@ -550,6 +553,7 @@ export async function createZipInBrowser(
   params: Record<string, string | number | boolean>,
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
+  const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   const usedNames = new Set<string>();
 
@@ -612,6 +616,7 @@ export async function extractZipInBrowser(
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
   onProgress?.(20);
+  const { default: JSZip } = await import('jszip');
   const buf = await file.arrayBuffer();
   let archive: JSZip;
   try {
@@ -679,6 +684,7 @@ export async function convertSpreadsheetInBrowser(
   onProgress?: (percent: number) => void
 ): Promise<BrowserProcessResult> {
   onProgress?.(25);
+  const XLSX = await import('xlsx');
   const arrayBuffer = await file.arrayBuffer();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -746,5 +752,149 @@ export async function convertSpreadsheetInBrowser(
     outputSize: blob.size,
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     details: `Libro Excel XLSX generado`,
+  };
+}
+
+/**
+ * Gira las páginas indicadas de un PDF en el navegador.
+ */
+export async function rotatePdfInBrowser(
+  file: File,
+  params: Record<string, string | number | boolean> = {},
+  onProgress?: (percent: number) => void
+): Promise<BrowserProcessResult> {
+  const { PDFDocument, degrees } = await import('pdf-lib');
+  onProgress?.(15);
+
+  const arrayBuffer = await file.arrayBuffer();
+  let srcDoc: PDFDocument;
+  try {
+    srcDoc = await PDFDocument.load(arrayBuffer);
+  } catch {
+    throw new Error(`No se pudo abrir "${file.name}". Verifica que sea un PDF válido sin contraseña.`);
+  }
+
+  const totalPages = srcDoc.getPageCount();
+  if (totalPages === 0) {
+    throw new Error('El documento PDF no contiene páginas.');
+  }
+
+  const rawAngle = Number(params.angle ?? 90);
+  const angle = [90, 180, 270].includes(rawAngle) ? rawAngle : 90;
+
+  const rangeStr = String(params.pages ?? 'all').trim();
+  let indices: number[];
+  if (rangeStr.toLowerCase() === 'all') {
+    indices = srcDoc.getPageIndices();
+  } else {
+    const parsed = parsePdfPageRanges(rangeStr, totalPages);
+    if (parsed.error || parsed.pages.length === 0) {
+      throw new Error(parsed.error || 'No se seleccionaron páginas válidas.');
+    }
+    indices = parsed.pages;
+  }
+
+  for (const idx of indices) {
+    const page = srcDoc.getPage(idx);
+    const current = page.getRotation().angle;
+    page.setRotation(degrees((current + angle) % 360));
+  }
+  onProgress?.(70);
+
+  const outBytes = await srcDoc.save();
+  onProgress?.(100);
+
+  const blob = new Blob([new Uint8Array(outBytes)], { type: 'application/pdf' });
+  const outName = buildOutputFilename(file.name, 'pdf', 'girado');
+
+  return {
+    outputBlob: blob,
+    outputFilename: outName,
+    outputSize: blob.size,
+    mimeType: 'application/pdf',
+    details: `${indices.length} ${indices.length === 1 ? 'página girada' : 'páginas giradas'} ${angle}°`,
+  };
+}
+
+/**
+ * Añade una marca de agua de texto en todas las páginas de un PDF en el navegador.
+ */
+export async function addWatermarkToPdfInBrowser(
+  file: File,
+  params: Record<string, string | number | boolean> = {},
+  onProgress?: (percent: number) => void
+): Promise<BrowserProcessResult> {
+  const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib');
+  onProgress?.(15);
+
+  const text = String(params.text ?? 'CONFIDENCIAL').trim().slice(0, 80);
+  if (!text) {
+    throw new Error('El texto de la marca de agua no puede estar vacío.');
+  }
+
+  const rawOpacity = Number(params.opacity ?? 30);
+  const opacity = Math.min(80, Math.max(5, Number.isFinite(rawOpacity) ? rawOpacity : 30));
+  const rawFontSize = Number(params.fontSize ?? 48);
+  const fontSize = Math.min(120, Math.max(12, Number.isFinite(rawFontSize) ? rawFontSize : 48));
+  const position = String(params.position ?? 'diagonal');
+
+  const arrayBuffer = await file.arrayBuffer();
+  let srcDoc: PDFDocument;
+  try {
+    srcDoc = await PDFDocument.load(arrayBuffer);
+  } catch {
+    throw new Error(`No se pudo abrir "${file.name}". Verifica que sea un PDF válido sin contraseña.`);
+  }
+
+  const totalPages = srcDoc.getPageCount();
+  if (totalPages === 0) {
+    throw new Error('El documento PDF no contiene páginas.');
+  }
+
+  const font = await srcDoc.embedFont(StandardFonts.HelveticaBold);
+  const color = rgb(0.45, 0.45, 0.45);
+  onProgress?.(45);
+
+  for (let i = 0; i < totalPages; i++) {
+    const page = srcDoc.getPage(i);
+    const { width, height } = page.getSize();
+    const textWidth = font.widthOfTextAtSize(text, fontSize);
+    const x = (width - textWidth) / 2;
+    const y = height / 2;
+    if (position === 'diagonal') {
+      page.drawText(text, {
+        x,
+        y,
+        size: fontSize,
+        font,
+        color,
+        opacity: opacity / 100,
+        rotate: degrees(45),
+      });
+    } else {
+      page.drawText(text, {
+        x,
+        y,
+        size: fontSize,
+        font,
+        color,
+        opacity: opacity / 100,
+      });
+    }
+    onProgress?.(45 + Math.round(((i + 1) / totalPages) * 40));
+  }
+
+  const outBytes = await srcDoc.save();
+  onProgress?.(100);
+
+  const blob = new Blob([new Uint8Array(outBytes)], { type: 'application/pdf' });
+  const outName = buildOutputFilename(file.name, 'pdf', 'marca-agua');
+
+  return {
+    outputBlob: blob,
+    outputFilename: outName,
+    outputSize: blob.size,
+    mimeType: 'application/pdf',
+    details: `Marca de agua aplicada en ${totalPages} ${totalPages === 1 ? 'página' : 'páginas'}`,
   };
 }

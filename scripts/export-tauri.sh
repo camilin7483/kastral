@@ -33,8 +33,9 @@ fi
 test -f out/index.html || { echo "ERROR: out/index.html missing" >&2; exit 1; }
 
 count="$(find out/herramientas -maxdepth 1 -name '*.html' | wc -l)"
-if [ "$count" -ne 17 ]; then
-  echo "ERROR: expected 17 tool slugs in out/herramientas, found $count" >&2
+expected="$(grep -oE "slug:[[:space:]]*['\"][^'\"]+['\"]" lib/tools-catalog.ts | wc -l)"
+if [ "$count" -ne "$expected" ]; then
+  echo "ERROR: expected $expected tool slugs in out/herramientas, found $count" >&2
   exit 1
 fi
 

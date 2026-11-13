@@ -19,7 +19,7 @@ export default function PorQueKastralPage() {
           Por qué usar Kastral
         </h1>
         <p className="text-base text-zinc-700 dark:text-zinc-300 leading-relaxed">
-          Kastral es una plataforma gratuita de 17 herramientas para convertir, comprimir y
+          Kastral es una plataforma gratuita de 19 herramientas para convertir, comprimir y
           simplificar archivos. Esta página explica qué hace de forma distinta, con datos
           verificables en este mismo sitio, y también en qué queda por detrás de otras
           plataformas.
@@ -32,9 +32,10 @@ export default function PorQueKastralPage() {
         </h2>
         <ul className="list-disc pl-5 space-y-2 text-sm sm:text-base text-zinc-700 dark:text-zinc-300 leading-relaxed">
           <li>
-            <strong>11 herramientas con modo 100 % en el navegador:</strong> combinar, dividir
-            y extraer páginas de PDF, imágenes a PDF, crear y extraer ZIP, XLSX a CSV/JSON y
-            conversión de imagen (PNG/JPG/WebP) se ejecutan en tu equipo sin subir nada.
+            <strong>13 herramientas con modo 100 % en el navegador:</strong> combinar, dividir,
+            girar y marcar con agua páginas de PDF, extraer páginas, imágenes a PDF, crear y
+            extraer ZIP, XLSX a CSV/JSON y conversión de imagen (PNG/JPG/WebP) se ejecutan en
+            tu equipo sin subir nada.
           </li>
           <li>
             <strong>6 herramientas pesadas en servidor temporal:</strong> comprimir PDF, PDF a
@@ -88,7 +89,7 @@ export default function PorQueKastralPage() {
             <tbody className="text-zinc-700 dark:text-zinc-300">
               <tr className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className="px-4 py-3">Procesamiento en tu dispositivo cuando es posible</td>
-                <td className="px-4 py-3">✔ 11 herramientas con modo navegador</td>
+                <td className="px-4 py-3">✔ 13 herramientas con modo navegador</td>
                 <td className="px-4 py-3">≈/varía (centrado en servidor)</td>
                 <td className="px-4 py-3">≈/varía (centrado en servidor)</td>
                 <td className="px-4 py-3">≈/varía (centrado en servidor)</td>
@@ -123,7 +124,7 @@ export default function PorQueKastralPage() {
               </tr>
               <tr className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className="px-4 py-3">Amplitud de formatos soportados</td>
-                <td className="px-4 py-3">≈ 17 herramientas de uso común</td>
+                <td className="px-4 py-3">≈ 19 herramientas de uso común</td>
                 <td className="px-4 py-3">≈/varía (foco PDF)</td>
                 <td className="px-4 py-3">≈/varía (foco PDF)</td>
                 <td className="px-4 py-3">✔ Catálogo más amplio</td>

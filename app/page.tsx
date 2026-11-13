@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { MapPin, ShieldCheck, Zap } from 'lucide-react';
 import { KASTRAL_TOOLS } from '@/lib/tools-catalog';
 import { FileWorkbench } from '@/components/FileWorkbench';
 import { HomeCatalog } from './HomeCatalog';
@@ -30,6 +31,21 @@ export default function HomePage() {
           <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl">
             A diferencia de ILovePDF o SmallPDF: tus archivos se procesan en tu propio dispositivo siempre que es posible, sin cuentas ni telemetría, y cada límite está documentado — nada de muros de pago a mitad de tarea.
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] text-zinc-700 dark:text-zinc-300">
+              <MapPin className="w-3.5 h-3.5 text-[#C86D2D] dark:text-[#DF7B35]" />
+              Cada descarga indica dónde se guardó
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] text-zinc-700 dark:text-zinc-300">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#C86D2D] dark:text-[#DF7B35]" />
+              Procesamiento local primero
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-[#141417] border border-[#DCD5CB] dark:border-[#27272D] text-zinc-700 dark:text-zinc-300">
+              <Zap className="w-3.5 h-3.5 text-[#C86D2D] dark:text-[#DF7B35]" />
+              Sin registro ni marcas de agua
+            </span>
+          </div>
         </div>
 
         {/* Mesa de trabajo interactiva en primera pantalla */}
@@ -61,7 +77,7 @@ export default function HomePage() {
               01. Procesamiento en tu Dispositivo Siempre que es Posible
             </h3>
             <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
-              La mayoría de las 17 herramientas (imagen, documentos, hojas de cálculo y ZIP) se ejecutan en la memoria de tu navegador. Solo audio, vídeo, la compresión PDF con Ghostscript y la salida AVIF usan el servidor, que borra cada archivo al terminar.
+              La mayoría de las 19 herramientas (imagen, documentos, hojas de cálculo y ZIP) se ejecutan en la memoria de tu navegador. Solo audio, vídeo, la compresión de PDF, PDF a imágenes y la salida AVIF usan el servidor, que borra cada archivo al terminar.
             </p>
           </div>
 

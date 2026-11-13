@@ -40,3 +40,41 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Notificaciones globales: entrada suave desde abajo y salida rápida. */
+@keyframes kastral-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes kastral-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+.kastral-toast {
+  animation: kastral-toast-in 220ms ease-out;
+}
+
+.kastral-toast-salida {
+  animation: kastral-toast-out 180ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kastral-toast,
+  .kastral-toast-salida {
+    animation: none;
+  }
+}

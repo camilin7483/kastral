@@ -32,7 +32,7 @@ export default function ComoFuncionaPage() {
         </p>
         <ul className="list-disc pl-5 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
           <li>
-            <strong>Combinar, Dividir y Extraer páginas PDF:</strong> Se procesan en tu navegador mediante <code>pdf-lib</code> sin subir el documento a Internet.
+            <strong>Combinar, Dividir, Girar, Marcar con Agua y Extraer páginas PDF:</strong> Se procesan en tu navegador mediante <code>pdf-lib</code> sin subir el documento a Internet.
           </li>
           <li>
             <strong>Crear y Extraer archivos ZIP:</strong> Se empaquetan y descomprimen localmente con validación contra rutas fuera de directorio (protección Zip Slip).

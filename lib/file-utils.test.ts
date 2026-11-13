@@ -32,6 +32,15 @@ test('sanitizeFilename previene path traversal y caracteres peligrosos', () => {
   assert.equal(sanitizeFilename('...'), 'archivo');
 });
 
+test('sanitizeFilename conserva la extensión al truncar nombres largos', () => {
+  const longName = `${'a'.repeat(140)}.pdf`;
+  const safe = sanitizeFilename(longName);
+  assert.equal(safe.length, 120);
+  assert.ok(safe.endsWith('.pdf'));
+  assert.equal(safe.replace(/\.pdf$/, '').length, 116);
+  assert.equal(sanitizeFilename(`${'b'.repeat(130)}.muylarga`).length, 120);
+});
+
 test('isSafeArchiveEntryPath bloquea ataques Zip Slip', () => {
   assert.equal(isSafeArchiveEntryPath('documentos/informe.pdf'), true);
   assert.equal(isSafeArchiveEntryPath('foto.png'), true);

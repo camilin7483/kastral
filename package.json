@@ -10,7 +10,7 @@
     "test": "bun test lib/",
     "lint": "eslint .",
     "clean": "next clean",
-    "check:branding": "./scripts/check-branding.sh"
+    "check:branding": "bash ./scripts/check-branding.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

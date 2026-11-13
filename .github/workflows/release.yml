@@ -29,19 +29,19 @@ jobs:
           name: kastral-windows-setup
           path: src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
-      - name: Generate SHA256SUMS
+      - name: Generate SHA256SUMS (Windows)
         shell: pwsh
         run: |
           $dir = 'src-tauri/target/release/bundle/nsis'
           Get-ChildItem "$dir/*-setup.exe" | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$h  $($_.Name)"
-          } | Set-Content "$dir/SHA256SUMS" -Encoding ascii
+          } | Set-Content "$dir/SHA256SUMS-windows.txt" -Encoding ascii
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
-            src-tauri/target/release/bundle/nsis/SHA256SUMS
+            src-tauri/target/release/bundle/nsis/SHA256SUMS-windows.txt
 
   build-linux:
     runs-on: ubuntu-latest
@@ -61,13 +61,13 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
-      - name: Generate SHA256SUMS
+      - name: Generate SHA256SUMS (Linux)
         run: |
           cd src-tauri/target/release/bundle
-          sha256sum deb/*.deb appimage/*.AppImage > SHA256SUMS
+          sha256sum deb/*.deb appimage/*.AppImage > SHA256SUMS-linux.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/SHA256SUMS
+            src-tauri/target/release/bundle/SHA256SUMS-linux.txt
